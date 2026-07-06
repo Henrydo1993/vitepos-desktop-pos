@@ -124,8 +124,12 @@ Floor table-map / waiter assignment; customer-facing display; scales; loyalty/pr
 
 ## 17. Prerequisites the user must provide
 
-1. A **test/staging Vitepos site** (WordPress + WooCommerce + Vitepos Pro, licensed) with sample menu data.
+1. A **live Vitepos site** (WordPress + WooCommerce + Vitepos Pro, licensed). *Decision: build against live rather than staging.* Dev guardrails: use a dedicated test product/category and a test customer, mark/delete test orders, and temporarily disable customer order emails while firing test orders.
 2. A **POS WordPress user** (POS role) and a configured **Outlet + Counter** in Vitepos admin.
 3. A **Pusher** account (free tier) with key/secret/cluster set in Vitepos push settings (optional; enables real-time).
 4. **Printer hardware + static IPs** (counter/kitchen/bar) — at least one to start — plus cash drawer and USB barcode scanner.
 5. The target **Windows terminal** machine for the counter.
+
+### Hosting
+
+High-end hosting is **not** required. The client is local-first, so counter speed and printing are independent of server performance, and real-time online-order alerts are offloaded to Pusher (third-party). The backend only needs **decent, reliable** WooCommerce hosting — a solid mid-tier managed host or small VPS (~2–4 GB RAM, PHP 8.x, Redis object cache preferred); avoid oversold bargain shared hosting that throttles/times out the REST API. If the live store already runs acceptably today, it is very likely sufficient. The only server-load moments are the one-time initial catalog sync and the post-offline backlog flush, both background and slowness-tolerant.
