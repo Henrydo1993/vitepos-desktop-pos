@@ -1,0 +1,27 @@
+{
+  "name": "vitepos-desktop-pos",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Windows desktop POS client for Vitepos/WooCommerce (Phase 1)",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "probe": "tsx scripts/probe-api.ts"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "axios-cookiejar-support": "^5.0.5",
+    "better-sqlite3": "^11.8.1",
+    "dotenv": "^16.4.7",
+    "node-thermal-printer": "^4.4.4",
+    "tough-cookie": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}
