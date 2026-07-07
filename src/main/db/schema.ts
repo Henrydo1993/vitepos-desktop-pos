@@ -4,8 +4,9 @@ const STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS categories (
       id INTEGER PRIMARY KEY, name TEXT NOT NULL, parent_id INTEGER, station TEXT )`,
   `CREATE TABLE IF NOT EXISTS products (
-      id INTEGER PRIMARY KEY, name TEXT NOT NULL, sku TEXT,
-      price REAL NOT NULL, category_id INTEGER, tax_class TEXT, hidden INTEGER DEFAULT 0 )`,
+      id INTEGER PRIMARY KEY, name TEXT NOT NULL, sku TEXT, price REAL NOT NULL,
+      category TEXT, taxable INTEGER DEFAULT 0, tax_rate REAL DEFAULT 0,
+      type TEXT DEFAULT 'simple', hidden INTEGER DEFAULT 0 )`,
   `CREATE TABLE IF NOT EXISTS modifiers (
       id INTEGER PRIMARY KEY, product_id INTEGER, name TEXT, price REAL DEFAULT 0 )`,
   `CREATE TABLE IF NOT EXISTS taxes (

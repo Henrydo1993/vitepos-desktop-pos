@@ -3,16 +3,26 @@ import type { Session } from '../api/auth'
 import { fetchCategories, fetchProducts, fetchTaxes } from '../api/client'
 import { upsertCategory, upsertProduct } from '../db/repo'
 
-// Field mapping is defensive: adjust to fixtures/products.json (plan Task 1) if the live shape differs.
+// Mapping confirmed against live opaldessert.com.au product/list shape (see fixtures).
+const decodeEntities = (s: any) =>
+  String(s ?? '')
+    .replace(/&amp;/g, '&')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+
 export function normalizeProduct(raw: any) {
   return {
     id: Number(raw.id ?? raw.product_id),
-    name: String(raw.name ?? raw.title),
-    sku: raw.sku ?? null,
-    price: Number(raw.price ?? raw.regular_price ?? 0),
-    category_id: Number(raw.category_id ?? raw.categories?.[0]?.id ?? 0) || null,
-    tax_class: raw.tax_class ?? null,
-    hidden: raw.pos_hide ? 1 : 0,
+    name: decodeEntities(raw.name ?? raw.title),
+    sku: raw.sku ? String(raw.sku) : null,
+    price: Number(raw.price ?? raw.regular_price ?? 0) || 0,
+    category: Array.isArray(raw.categories) && raw.categories.length ? decodeEntities(raw.categories[0]) : null,
+    taxable: raw.taxable === 'Y' || raw.taxable === true ? 1 : 0,
+    tax_rate: Number(raw.tax_rate ?? 0) || 0,
+    type: raw.type ?? 'simple',
+    hidden: raw.is_hidden === 'Y' || raw.hidden === true ? 1 : 0,
   }
 }
 

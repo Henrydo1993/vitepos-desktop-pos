@@ -8,7 +8,7 @@ describe('schema', () => {
   it('stores and reads a product', () => {
     const db = openDb(':memory:')
     migrate(db)
-    db.prepare('INSERT INTO products (id,name,price,category_id) VALUES (?,?,?,?)').run(1, 'Latte', 5.5, 10)
+    db.prepare('INSERT INTO products (id,name,price,category) VALUES (?,?,?,?)').run(1, 'Latte', 5.5, 'Coffee')
     const row = db.prepare('SELECT name, price FROM products WHERE id=1').get() as any
     expect(row).toEqual({ name: 'Latte', price: 5.5 })
   })

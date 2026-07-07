@@ -11,26 +11,27 @@ export const upsertCategory = (
     )
     .run({ parent_id: null, station: null, ...c })
 
-export const upsertProduct = (
-  db: Database.Database,
-  p: {
-    id: number
-    name: string
-    sku?: string | null
-    price: number
-    category_id?: number | null
-    tax_class?: string | null
-    hidden?: number
-  },
-) =>
+export interface ProductRow {
+  id: number
+  name: string
+  sku?: string | null
+  price: number
+  category?: string | null
+  taxable?: number
+  tax_rate?: number
+  type?: string
+  hidden?: number
+}
+
+export const upsertProduct = (db: Database.Database, p: ProductRow) =>
   db
     .prepare(
-      `INSERT INTO products (id,name,sku,price,category_id,tax_class,hidden)
-       VALUES (@id,@name,@sku,@price,@category_id,@tax_class,@hidden)
-       ON CONFLICT(id) DO UPDATE SET name=@name, sku=@sku, price=@price,
-         category_id=@category_id, tax_class=@tax_class, hidden=@hidden`,
+      `INSERT INTO products (id,name,sku,price,category,taxable,tax_rate,type,hidden)
+       VALUES (@id,@name,@sku,@price,@category,@taxable,@tax_rate,@type,@hidden)
+       ON CONFLICT(id) DO UPDATE SET name=@name, sku=@sku, price=@price, category=@category,
+         taxable=@taxable, tax_rate=@tax_rate, type=@type, hidden=@hidden`,
     )
-    .run({ sku: null, category_id: null, tax_class: null, hidden: 0, ...p })
+    .run({ sku: null, category: null, taxable: 0, tax_rate: 0, type: 'simple', hidden: 0, ...p })
 
 export const listMenu = (db: Database.Database) =>
   db.prepare(`SELECT * FROM products WHERE hidden=0 ORDER BY name`).all()
