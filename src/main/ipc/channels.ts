@@ -4,14 +4,14 @@ import type BetterSqlite3 from 'better-sqlite3'
 import type { Session } from '../api/auth'
 import { listMenu } from '../db/repo'
 import { syncCatalog } from '../sync/catalog'
-import { fetchVariations, searchCustomers, createCustomer } from '../api/client'
+import { fetchVariations, searchCustomers, createCustomer, fetchReceiptConfig } from '../api/client'
 import { pushPending, reconcileDeletedOrders } from '../sync/orders'
 import { pollOnline } from '../sync/online'
 import { getSettings, saveSettings, seedPrintersFromSettings, type Settings } from '../config'
 import { priceOrder, type PriceLine, type Discount } from '../order/pricing'
 import { routeByStation, type TicketItem } from '../print/router'
-import { buildKitchenTicket, buildReceipt } from '../print/tickets'
-import { printWithRetry, type PrinterCfg } from '../print/engine'
+import { buildKitchenTicket, DEFAULT_RECEIPT, type ReceiptConfig } from '../print/tickets'
+import { printWithRetry, printReceiptWithRetry, type PrinterCfg } from '../print/engine'
 
 type Notify = (channel: string, data: unknown) => void
 type SessionRef = { current: Session }
@@ -38,18 +38,40 @@ function printersOf(db: BetterSqlite3.Database): Record<string, PrinterCfg> {
   return Object.fromEntries(rows.map((p) => [p.station, p]))
 }
 
+// Cached Vitepos receipt/invoice config (fetched from /basic/settings on sync).
+function getReceiptCfg(db: BetterSqlite3.Database): ReceiptConfig {
+  const row = db.prepare("SELECT value FROM meta WHERE key='cfg_receipt'").get() as { value?: string } | undefined
+  if (row?.value) {
+    try {
+      return JSON.parse(row.value) as ReceiptConfig
+    } catch {
+      /* fall through to default */
+    }
+  }
+  return DEFAULT_RECEIPT
+}
+async function cacheReceiptCfg(db: BetterSqlite3.Database, s: Session) {
+  try {
+    const rc = await fetchReceiptConfig(s)
+    db.prepare("INSERT INTO meta (key,value) VALUES ('cfg_receipt',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(rc))
+  } catch {
+    /* offline — keep last cached config */
+  }
+}
+
 function printReceiptAndTickets(
   db: BetterSqlite3.Database,
   token: number,
   items: PricedItem[],
   totals: { subtotal: number; discount: number; tax: number; total: number; tender: number; change: number } | null,
-  meta: { orderType?: string; note?: string; customerName?: string } = {},
+  meta: { orderType?: string; note?: string; customerName?: string; staffName?: string } = {},
 ) {
   const byStation = printersOf(db)
   if (totals && byStation.counter) {
-    void printWithRetry(
+    void printReceiptWithRetry(
       byStation.counter,
-      buildReceipt({ token, items, ...totals, orderType: meta.orderType, customerName: meta.customerName }),
+      { token, items, ...totals, orderType: meta.orderType, customerName: meta.customerName, staffName: meta.staffName },
+      getReceiptCfg(db),
       { kickDrawer: true },
     )
   }
@@ -64,7 +86,11 @@ function printReceiptAndTickets(
 }
 
 export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, rebuildSession: () => void) {
-  ipcMain.handle('catalog:sync', () => syncCatalog(db, sessionRef.current))
+  ipcMain.handle('catalog:sync', async () => {
+    const r = await syncCatalog(db, sessionRef.current)
+    await cacheReceiptCfg(db, sessionRef.current)
+    return r
+  })
   ipcMain.handle('menu:list', () => listMenu(db))
   ipcMain.handle('printers:list', () => db.prepare('SELECT station,type,address FROM printers').all())
   ipcMain.handle('product:variations', (_e, productId: number) => fetchVariations(sessionRef.current, productId))
@@ -83,6 +109,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     } catch {
       /* offline — keep cached catalog */
     }
+    await cacheReceiptCfg(db, sessionRef.current)
     const push = await pushPending(db, sessionRef.current, outlet, counter).catch(() => ({ pending: 0, pushed: 0 }))
     const recon = await reconcileDeletedOrders(db, sessionRef.current).catch(() => ({ removed: 0 }))
     try {
@@ -238,6 +265,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
       orderType: payload.orderType,
       note: payload.note,
       customerName: payload.customerName,
+      staffName: payload.staffName,
     })
     return { token, orderId: oid }
   })
@@ -254,9 +282,9 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     }))
     const byStation = printersOf(db)
     if (byStation.counter) {
-      void printWithRetry(
+      void printReceiptWithRetry(
         byStation.counter,
-        buildReceipt({
+        {
           token: o.token,
           items,
           subtotal: o.subtotal,
@@ -267,7 +295,9 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
           change: o.change,
           orderType: o.order_type,
           customerName: o.customer_name,
-        }),
+          staffName: o.staff_name,
+        },
+        getReceiptCfg(db),
       )
     }
     return { ok: true }

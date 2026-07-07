@@ -1,4 +1,18 @@
 import type { Session } from './auth'
+import type { ReceiptConfig } from '../print/tickets'
+
+const stripHtml = (v: unknown) =>
+  String(v ?? '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/﻿/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+const yes = (v: unknown) => v === true || v === 'Y' || v === '1' || v === 1
 
 // Pretty-permalink REST is disabled on the target install (/wp-json/ -> 404),
 // so use the ?rest_route= form. Vitepos routes are kebab-case (confirmed live).
@@ -54,4 +68,45 @@ export async function searchCustomers(s: Session, search = '') {
 export async function createCustomer(s: Session, data: Record<string, unknown>) {
   const res = await s.http.post(rr('customer/create'), data)
   return { ok: res.data?.status === true, data: res.data?.data ?? res.data }
+}
+
+// Receipt/invoice template from Vitepos settings, mapped to our ReceiptConfig so
+// the printed receipt matches what the owner configured in the Vitepos admin.
+export async function fetchReceiptConfig(s: Session): Promise<ReceiptConfig> {
+  const res = await s.http.get(rr('basic/settings'))
+  const st = res.data?.data?.settings ?? {}
+  const b = st.basic_settings ?? {}
+  const iv = st.inv_settings ?? {}
+  return {
+    shopName: stripHtml(b.shop_name) || 'Receipt',
+    currency: stripHtml(b.currency_symbol) || '$',
+    header: stripHtml(iv.header),
+    showHeader: yes(iv.show_header),
+    vatReg: stripHtml(iv.vat_reg_no),
+    vatRegLabel: stripHtml(iv.vat_reg_no_label) || 'Vat No',
+    showVatReg: yes(iv.show_vat_reg),
+    showOutletInfo: yes(iv.show_outlet_info),
+    showOutletPhone: yes(iv.show_outlet_phone),
+    showOutletAddress: yes(iv.show_outlet_address),
+    outletPhone: '',
+    outletAddress: '',
+    showCounter: yes(iv.show_counter_info),
+    counterLabel: stripHtml(iv.counter_operator_label) || 'Processed By',
+    showCustomer: yes(iv.show_customer_info),
+    showCustomerName: yes(iv.show_customer_name),
+    showCustomerPhone: yes(iv.show_customer_phone),
+    customerLabel: stripHtml(iv.customer_info_label) || 'Customer',
+    customerPhoneLabel: stripHtml(iv.customer_phone_label) || 'Phone',
+    showOrderNo: yes(iv.show_order_no),
+    orderNoLabel: stripHtml(iv.order_no_label) || 'Order No',
+    showOrderType: yes(iv.show_order_type),
+    showTable: yes(iv.show_table_info),
+    showWaiter: yes(iv.show_waiter_info),
+    showDiscount: yes(iv.show_discount),
+    taxLabel: stripHtml(iv.unit_tax_label) || 'Tax',
+    footer: stripHtml(iv.footer),
+    showFooter: yes(iv.show_footer),
+    footerExtra: stripHtml(iv.footer_extra),
+    pageWidth: Number(iv.page_width) || 80,
+  }
 }

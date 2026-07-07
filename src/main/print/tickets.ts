@@ -19,7 +19,42 @@ export function buildKitchenTicket(o: {
   return lines.join('\n')
 }
 
-export function buildReceipt(o: {
+// Receipt template mirrored from Vitepos `inv_settings` (fetched + cached from
+// /basic/settings). The printer renders it with real formatting (see engine.ts).
+export interface ReceiptConfig {
+  shopName: string
+  currency: string
+  header: string
+  showHeader: boolean
+  vatReg: string
+  vatRegLabel: string
+  showVatReg: boolean
+  showOutletInfo: boolean
+  showOutletPhone: boolean
+  showOutletAddress: boolean
+  outletPhone: string
+  outletAddress: string
+  showCounter: boolean
+  counterLabel: string
+  showCustomer: boolean
+  showCustomerName: boolean
+  showCustomerPhone: boolean
+  customerLabel: string
+  customerPhoneLabel: string
+  showOrderNo: boolean
+  orderNoLabel: string
+  showOrderType: boolean
+  showTable: boolean
+  showWaiter: boolean
+  showDiscount: boolean
+  taxLabel: string
+  footer: string
+  showFooter: boolean
+  footerExtra: string
+  pageWidth: number
+}
+
+export interface ReceiptData {
   token: number
   items: { name: string; qty: number; price: number }[]
   subtotal: number
@@ -30,23 +65,40 @@ export function buildReceipt(o: {
   change: number
   orderType?: string
   customerName?: string
-}): string {
-  const money = (n: number) => `$${n.toFixed(2)}`
-  const lines = ['RECEIPT', `TOKEN #${o.token}`]
-  if (o.orderType) lines.push(o.orderType.replace('_', '-').toUpperCase())
-  if (o.customerName) lines.push(`Customer: ${o.customerName}`)
-  lines.push('--------------------------------')
-  for (const it of o.items) lines.push(`${it.qty} x ${it.name}  ${money(it.price * it.qty)}`)
-  lines.push(
-    '--------------------------------',
-    `Subtotal ${money(o.subtotal)}`,
-    ...(o.discount ? [`Discount -${money(o.discount)}`] : []),
-    `Tax ${money(o.tax)}`,
-    `TOTAL ${money(o.total)}`,
-    `Cash ${money(o.tender)}`,
-    `Change ${money(o.change)}`,
-    '',
-    'Thank you!',
-  )
-  return lines.join('\n')
+  customerPhone?: string
+  staffName?: string
+}
+
+// Fallback when the store config hasn't been fetched yet (first run / offline).
+export const DEFAULT_RECEIPT: ReceiptConfig = {
+  shopName: 'Receipt',
+  currency: '$',
+  header: '',
+  showHeader: true,
+  vatReg: '',
+  vatRegLabel: 'Vat No',
+  showVatReg: false,
+  showOutletInfo: false,
+  showOutletPhone: false,
+  showOutletAddress: false,
+  outletPhone: '',
+  outletAddress: '',
+  showCounter: true,
+  counterLabel: 'Processed By',
+  showCustomer: true,
+  showCustomerName: true,
+  showCustomerPhone: true,
+  customerLabel: 'Customer',
+  customerPhoneLabel: 'Phone',
+  showOrderNo: true,
+  orderNoLabel: 'Order No',
+  showOrderType: false,
+  showTable: false,
+  showWaiter: false,
+  showDiscount: true,
+  taxLabel: 'Tax',
+  footer: 'Thank you!',
+  showFooter: true,
+  footerExtra: '',
+  pageWidth: 80,
 }
