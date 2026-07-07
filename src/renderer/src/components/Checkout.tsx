@@ -20,7 +20,7 @@ const METHODS: { k: Method; label: string; icon: string }[] = [
 // Vitepos-style full-screen checkout that takes over the product area — the cart
 // stays visible on the left, exactly like the real Vitepos POS.
 export function Checkout({ onClose }: { onClose: () => void }) {
-  const { lines, orderType, discount, note, setNote, customer, fee, clear } = useCart()
+  const { lines, orderType, discount, note, setNote, customer, fee, openOrderId, clear } = useCart()
   const staff = useAuth((s) => s.staff)
   const [totals, setTotals] = useState<Totals | null>(null)
   const [method, setMethod] = useState<Method>('cash')
@@ -57,6 +57,7 @@ export function Checkout({ onClose }: { onClose: () => void }) {
         customerId: customer?.id,
         customerName: customer?.name,
         staffName: staff?.name,
+        openOrderId: openOrderId ?? undefined,
       })
       clear()
       onClose()

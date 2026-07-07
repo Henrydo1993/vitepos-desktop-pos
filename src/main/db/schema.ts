@@ -28,6 +28,11 @@ const STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS staff (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, pin_hash TEXT NOT NULL,
       role TEXT DEFAULT 'staff', active INTEGER DEFAULT 1, created_at TEXT )`,
+  // Restaurant mode: unpaid open tabs held against a table (survive restarts).
+  `CREATE TABLE IF NOT EXISTS open_orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, table_label TEXT, order_type TEXT DEFAULT 'table',
+      note TEXT, customer_id INTEGER, customer_name TEXT, staff_name TEXT,
+      lines TEXT, created_at TEXT, updated_at TEXT )`,
   `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)`,
 ]
 

@@ -6,9 +6,11 @@ import { Checkout } from './components/Checkout'
 import { LockScreen } from './components/LockScreen'
 import { DashboardView } from './components/DashboardView'
 import { OrdersView } from './components/OrdersView'
+import { TablesView, type TableRow } from './components/TablesView'
 import { SettingsModal } from './components/SettingsModal'
 import { VirtualKeyboard } from './components/VirtualKeyboard'
 import { useAuth } from './state/auth'
+import { useCart } from './state/cart'
 
 export default function App() {
   const [paying, setPaying] = useState(false)
@@ -19,6 +21,18 @@ export default function App() {
   const [version, setVersion] = useState('')
   const [locked, setLocked] = useState(true)
   const { staff, setStaff } = useAuth()
+  const { setTable, loadOpen, clear } = useCart()
+
+  const openTable = async (t: TableRow) => {
+    if (t.open) {
+      const o = await window.pos.openOrderGet(t.open.id)
+      if (o) loadOpen(o)
+    } else {
+      clear()
+      setTable(t.label, null)
+    }
+    setView('pos')
+  }
 
   useEffect(() => {
     window.pos.getSettings().then((s) => {
@@ -83,12 +97,12 @@ export default function App() {
       />
       {view === 'pos' ? (
         <>
-          <CartPanel onPay={() => setPaying(true)} />
+          <CartPanel onPay={() => setPaying(true)} onTables={() => setView('tables')} />
           {paying ? <Checkout onClose={() => setPaying(false)} /> : <ProductArea />}
         </>
       ) : (
         <div style={{ gridColumn: '2 / -1', minHeight: 0, overflow: 'hidden' }}>
-          {view === 'dashboard' ? <DashboardView /> : <OrdersView />}
+          {view === 'dashboard' ? <DashboardView /> : view === 'orders' ? <OrdersView /> : <TablesView onOpen={openTable} />}
         </div>
       )}
       {showSettings && (

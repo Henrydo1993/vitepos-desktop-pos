@@ -26,6 +26,7 @@ interface CommitPayload {
   customerId?: number
   customerName?: string
   staffName?: string
+  openOrderId?: number
 }
 
 const outletOf = (db: BetterSqlite3.Database) => {
@@ -57,6 +58,31 @@ async function cacheReceiptCfg(db: BetterSqlite3.Database, s: Session) {
   } catch {
     /* offline — keep last cached config */
   }
+}
+
+interface OpenOrderPayload {
+  id?: number
+  tableLabel?: string
+  orderType?: string
+  note?: string
+  customerId?: number | null
+  customerName?: string | null
+  staffName?: string | null
+  lines?: unknown[]
+}
+function saveOpenOrder(db: BetterSqlite3.Database, p: OpenOrderPayload): number {
+  const now = new Date().toISOString()
+  const linesJson = JSON.stringify(p.lines ?? [])
+  if (p.id) {
+    db.prepare(
+      'UPDATE open_orders SET table_label=?,order_type=?,note=?,customer_id=?,customer_name=?,staff_name=?,lines=?,updated_at=? WHERE id=?',
+    ).run(p.tableLabel ?? null, p.orderType ?? 'table', p.note ?? '', p.customerId ?? null, p.customerName ?? null, p.staffName ?? null, linesJson, now, p.id)
+    return p.id
+  }
+  const info = db
+    .prepare('INSERT INTO open_orders (table_label,order_type,note,customer_id,customer_name,staff_name,lines,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
+    .run(p.tableLabel ?? null, p.orderType ?? 'table', p.note ?? '', p.customerId ?? null, p.customerName ?? null, p.staffName ?? null, linesJson, now, now)
+  return Number(info.lastInsertRowid)
 }
 
 function printReceiptAndTickets(
@@ -219,6 +245,71 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
       .all(params)
   })
 
+  // --- Restaurant: tables + open tabs (unpaid, fired to kitchen) ---
+  ipcMain.handle('tables:list', () => {
+    const count = Number(getSettings(db).table_count) || 12
+    const opens = db.prepare('SELECT id,table_label,lines,updated_at FROM open_orders').all() as {
+      id: number
+      table_label: string
+      lines: string
+      updated_at: string
+    }[]
+    const byTable: Record<string, { id: number; items: number; total: number; updatedAt: string }> = {}
+    for (const o of opens) {
+      let ls: { qty?: number; price?: number }[] = []
+      try {
+        ls = JSON.parse(o.lines || '[]')
+      } catch {
+        /* ignore */
+      }
+      byTable[o.table_label] = {
+        id: o.id,
+        items: ls.reduce((s, l) => s + (l.qty || 0), 0),
+        total: ls.reduce((s, l) => s + (l.price || 0) * (l.qty || 0), 0),
+        updatedAt: o.updated_at,
+      }
+    }
+    return Array.from({ length: count }, (_, i) => {
+      const label = `Table ${i + 1}`
+      return { label, open: byTable[label] ?? null }
+    })
+  })
+  ipcMain.handle('openorder:get', (_e, id: number) => {
+    const o = db.prepare('SELECT * FROM open_orders WHERE id=?').get(id) as
+      | { id: number; table_label: string; lines: string; note: string; customer_id: number | null; customer_name: string | null; staff_name: string | null }
+      | undefined
+    if (!o) return null
+    let lines: unknown[] = []
+    try {
+      lines = JSON.parse(o.lines || '[]')
+    } catch {
+      /* ignore */
+    }
+    return { id: o.id, tableLabel: o.table_label, lines, note: o.note, customerId: o.customer_id, customerName: o.customer_name, staffName: o.staff_name }
+  })
+  ipcMain.handle('openorder:save', (_e, p: OpenOrderPayload) => ({ id: saveOpenOrder(db, p) }))
+  ipcMain.handle('openorder:send', (_e, p: OpenOrderPayload) => {
+    const lines = (p.lines ?? []) as (TicketItem & { price: number; sent?: boolean })[]
+    const unsent = lines.filter((l) => !l.sent)
+    const id = saveOpenOrder(db, { ...p, lines: lines.map((l) => ({ ...l, sent: true })) })
+    if (unsent.length) {
+      const byStation = printersOf(db)
+      for (const [station, list] of Object.entries(routeByStation(unsent))) {
+        const cfg = byStation[station]
+        if (cfg)
+          void printWithRetry(
+            cfg,
+            buildKitchenTicket({ token: id, station: `${station.toUpperCase()} · ${p.tableLabel ?? ''}`.trim(), items: list, orderType: 'table', note: p.note ?? undefined }),
+          )
+      }
+    }
+    return { id, printed: unsent.length }
+  })
+  ipcMain.handle('openorder:close', (_e, id: number) => {
+    db.prepare('DELETE FROM open_orders WHERE id=?').run(id)
+    return { ok: true }
+  })
+
   // --- Settings ---
   ipcMain.handle('settings:get', () => getSettings(db))
   ipcMain.handle('settings:save', (_e, patch: Settings) => {
@@ -267,6 +358,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
       customerName: payload.customerName,
       staffName: payload.staffName,
     })
+    if (payload.openOrderId) db.prepare('DELETE FROM open_orders WHERE id=?').run(payload.openOrderId)
     return { token, orderId: oid }
   })
 

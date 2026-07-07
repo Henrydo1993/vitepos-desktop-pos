@@ -28,6 +28,11 @@ const pos = {
   staffRemove: (id: number) => ipcRenderer.invoke('staff:remove', id),
   dashToday: () => ipcRenderer.invoke('dash:today'),
   ordersList: (opts: { scope?: 'today' | 'all'; q?: string }) => ipcRenderer.invoke('orders:list', opts),
+  tablesList: () => ipcRenderer.invoke('tables:list'),
+  openOrderGet: (id: number) => ipcRenderer.invoke('openorder:get', id),
+  openOrderSave: (p: unknown) => ipcRenderer.invoke('openorder:save', p),
+  openOrderSend: (p: unknown) => ipcRenderer.invoke('openorder:send', p),
+  openOrderClose: (id: number) => ipcRenderer.invoke('openorder:close', id),
   onOnlineOrder: (cb: (data: { token: number; total: number; items: number }) => void) => {
     const listener = (_e: IpcRendererEvent, data: { token: number; total: number; items: number }) => cb(data)
     ipcRenderer.on('online:new', listener)

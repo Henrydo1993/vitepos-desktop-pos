@@ -26,4 +26,5 @@ export interface CartLine {
   tax_rate: number
   image: string | null
   modifiers: string[]
+  sent?: boolean // restaurant mode: already fired to the kitchen
 }

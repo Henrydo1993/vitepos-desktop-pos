@@ -1,8 +1,9 @@
 import type { Staff } from '../state/auth'
 
-export type View = 'pos' | 'dashboard' | 'orders'
+export type View = 'pos' | 'tables' | 'dashboard' | 'orders'
 const NAV: { key: View; label: string; ico: string }[] = [
   { key: 'pos', label: 'POS', ico: '🧾' },
+  { key: 'tables', label: 'Tables', ico: '🍽️' },
   { key: 'dashboard', label: 'Dashboard', ico: '📊' },
   { key: 'orders', label: 'Orders', ico: '📋' },
 ]

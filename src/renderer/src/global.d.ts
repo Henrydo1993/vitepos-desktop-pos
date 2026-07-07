@@ -1,4 +1,4 @@
-import type { MenuItem, Variation } from './types'
+import type { MenuItem, Variation, CartLine } from './types'
 
 declare global {
   interface Window {
@@ -28,6 +28,22 @@ declare global {
       >
       syncNow: () => Promise<{ pending: number; pushed: number }>
       syncRefresh: () => Promise<{ products: number; pushed: number; removed: number }>
+      tablesList: () => Promise<{ label: string; open: { id: number; items: number; total: number; updatedAt: string } | null }[]>
+      openOrderGet: (
+        id: number,
+      ) => Promise<{ id: number; tableLabel: string; lines: CartLine[]; note: string; customerId: number | null; customerName: string | null } | null>
+      openOrderSave: (p: {
+        id?: number
+        tableLabel?: string
+        orderType?: string
+        note?: string
+        customerId?: number | null
+        customerName?: string | null
+        staffName?: string | null
+        lines?: CartLine[]
+      }) => Promise<{ id: number }>
+      openOrderSend: (p: { id?: number; tableLabel?: string; note?: string; staffName?: string | null; lines?: CartLine[] }) => Promise<{ id: number; printed: number }>
+      openOrderClose: (id: number) => Promise<{ ok: boolean }>
       getSettings: () => Promise<Record<string, string>>
       saveSettings: (patch: Record<string, string>) => Promise<{ ok: boolean }>
       searchCustomers: (q: string) => Promise<

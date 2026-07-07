@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useCart, type OrderType } from '../state/cart'
+import { useAuth } from '../state/auth'
 import { DiscountModal } from './DiscountModal'
 import { CustomerModal } from './CustomerModal'
 import { FeeModal } from './FeeModal'
@@ -16,10 +17,18 @@ const OTYPES: { k: OrderType; label: string }[] = [
   { k: 'delivery', label: 'Delivery' },
 ]
 
-export function CartPanel({ onPay }: { onPay: () => void }) {
-  const { lines, held, orderType, setOrderType, discount, note, setNote, customer, setCustomer, fee, setQty, changeQty, clear, hold } =
+export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: () => void }) {
+  const { lines, held, orderType, setOrderType, discount, note, setNote, customer, setCustomer, fee, tableLabel, openOrderId, setQty, changeQty, clear, hold } =
     useCart()
+  const staff = useAuth((s) => s.staff)
   const [now, setNow] = useState(() => new Date())
+
+  const sendKitchen = async () => {
+    if (!lines.length) return
+    await window.pos.openOrderSend({ id: openOrderId ?? undefined, tableLabel: tableLabel ?? undefined, note, staffName: staff?.name, lines })
+    clear()
+    onTables()
+  }
   const [showDisc, setShowDisc] = useState(false)
   const [showCust, setShowCust] = useState(false)
   const [showFee, setShowFee] = useState(false)
@@ -48,14 +57,18 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
     <div className="cart">
       <div className="otype-bar">
         {OTYPES.map((o) => (
-          <button key={o.k} className={`otype${orderType === o.k ? ' on' : ''}`} onClick={() => setOrderType(o.k)}>
+          <button
+            key={o.k}
+            className={`otype${orderType === o.k ? ' on' : ''}`}
+            onClick={() => (o.k === 'table' ? onTables() : setOrderType(o.k))}
+          >
             {o.label}
           </button>
         ))}
       </div>
 
       <div className="cart-top">
-        <span className="num"># {lines.length ? 1 : 0}</span>
+        <span className="num">{tableLabel ? `🍽 ${tableLabel}` : `# ${lines.length ? 1 : 0}`}</span>
         <button className="icon-btn danger" onClick={clear} title="Clear order" disabled={!lines.length}>
           ✕
         </button>
@@ -147,9 +160,20 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
           </div>
         </div>
         <div className="hold-pay">
-          <button className="hold-btn" onClick={hold} disabled={!lines.length}>
-            ✋ Hold
-          </button>
+          {tableLabel ? (
+            <button
+              className="hold-btn"
+              style={{ flex: 1, width: 'auto', background: '#0a8a3f', color: '#fff' }}
+              onClick={sendKitchen}
+              disabled={!lines.length}
+            >
+              🍳 Send to Kitchen
+            </button>
+          ) : (
+            <button className="hold-btn" onClick={hold} disabled={!lines.length}>
+              ✋ Hold
+            </button>
+          )}
           <button className="pay-btn" onClick={onPay} disabled={!lines.length}>
             <span>${net.toFixed(2)}</span>
             <span>Pay Now ▸</span>

@@ -21,6 +21,8 @@ interface CartState {
   note: string
   customer: Customer | null
   fee: number
+  tableLabel: string | null
+  openOrderId: number | null
   add: (m: MenuItem) => void
   setQty: (i: number, qty: number) => void
   changeQty: (i: number, d: number) => void
@@ -33,9 +35,12 @@ interface CartState {
   setCustomer: (c: Customer | null) => void
   setFee: (n: number) => void
   discardHeld: (i: number) => void
+  setTable: (label: string | null, openId?: number | null) => void
+  loadOpen: (o: { id: number; tableLabel: string; lines: CartLine[]; note?: string; customerId?: number | null; customerName?: string | null }) => void
+  markAllSent: () => void
 }
 
-const RESET: Partial<CartState> = { lines: [], discount: null, note: '', customer: null, fee: 0 }
+const RESET: Partial<CartState> = { lines: [], discount: null, note: '', customer: null, fee: 0, tableLabel: null, openOrderId: null }
 
 export const useCart = create<CartState>((set) => ({
   lines: [],
@@ -45,9 +50,12 @@ export const useCart = create<CartState>((set) => ({
   note: '',
   customer: null,
   fee: 0,
+  tableLabel: null,
+  openOrderId: null,
   add: (m) =>
     set((s) => {
-      const idx = s.lines.findIndex((l) => l.product_id === m.id)
+      // Match an unsent line only — items already fired to the kitchen stay locked.
+      const idx = s.lines.findIndex((l) => l.product_id === m.id && !l.sent)
       if (idx >= 0) {
         const lines = [...s.lines]
         lines[idx] = { ...lines[idx], qty: lines[idx].qty + 1 }
@@ -91,4 +99,17 @@ export const useCart = create<CartState>((set) => ({
   setCustomer: (c) => set({ customer: c }),
   setFee: (n) => set({ fee: Math.max(0, n || 0) }),
   discardHeld: (i) => set((s) => ({ held: s.held.filter((_, j) => j !== i) })),
+  setTable: (label, openId = null) => set({ tableLabel: label, openOrderId: openId, orderType: 'table' }),
+  loadOpen: (o) =>
+    set({
+      lines: o.lines.map((l) => ({ ...l })),
+      tableLabel: o.tableLabel,
+      openOrderId: o.id,
+      orderType: 'table',
+      note: o.note ?? '',
+      customer: o.customerId ? { id: o.customerId, name: o.customerName ?? '' } : null,
+      discount: null,
+      fee: 0,
+    }),
+  markAllSent: () => set((s) => ({ lines: s.lines.map((l) => ({ ...l, sent: true })) })),
 }))
