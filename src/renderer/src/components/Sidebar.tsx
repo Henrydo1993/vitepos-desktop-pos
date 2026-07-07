@@ -9,7 +9,7 @@ const ITEMS = [
   { key: 'customers', label: 'Customers', ico: '👥' },
 ]
 
-export function Sidebar({ onOrders }: { onOrders: () => void }) {
+export function Sidebar({ onOrders, onSettings }: { onOrders: () => void; onSettings: () => void }) {
   return (
     <div className="nav">
       <div className="logo">OPAL</div>
@@ -23,6 +23,10 @@ export function Sidebar({ onOrders }: { onOrders: () => void }) {
           <span>{it.label}</span>
         </button>
       ))}
+      <button className="nav-item" style={{ marginTop: 'auto' }} onClick={onSettings}>
+        <span className="ico">⚙️</span>
+        <span>Settings</span>
+      </button>
     </div>
   )
 }

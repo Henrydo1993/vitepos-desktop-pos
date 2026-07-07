@@ -6,12 +6,14 @@ import { syncCatalog } from '../sync/catalog'
 import { fetchVariations, searchCustomers, createCustomer } from '../api/client'
 import { pushPending } from '../sync/orders'
 import { pollOnline } from '../sync/online'
+import { getSettings, saveSettings, seedPrintersFromSettings, type Settings } from '../config'
 import { priceOrder, type PriceLine, type Discount } from '../order/pricing'
 import { routeByStation, type TicketItem } from '../print/router'
 import { buildKitchenTicket, buildReceipt } from '../print/tickets'
 import { printWithRetry, type PrinterCfg } from '../print/engine'
 
 type Notify = (channel: string, data: unknown) => void
+type SessionRef = { current: Session }
 type PricedItem = TicketItem & { price: number; product_id?: number }
 
 interface CommitPayload {
@@ -22,6 +24,11 @@ interface CommitPayload {
   note?: string
   customerId?: number
   customerName?: string
+}
+
+const outletOf = (db: BetterSqlite3.Database) => {
+  const s = getSettings(db)
+  return { outlet: s.outlet, counter: s.counter }
 }
 
 function printersOf(db: BetterSqlite3.Database): Record<string, PrinterCfg> {
@@ -54,20 +61,32 @@ function printReceiptAndTickets(
   }
 }
 
-export function registerIpc(db: BetterSqlite3.Database, session: Session, env: Record<string, string>) {
-  ipcMain.handle('catalog:sync', () => syncCatalog(db, session))
+export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, rebuildSession: () => void) {
+  ipcMain.handle('catalog:sync', () => syncCatalog(db, sessionRef.current))
   ipcMain.handle('menu:list', () => listMenu(db))
   ipcMain.handle('printers:list', () => db.prepare('SELECT station,type,address FROM printers').all())
-  ipcMain.handle('product:variations', (_e, productId: number) => fetchVariations(session, productId))
+  ipcMain.handle('product:variations', (_e, productId: number) => fetchVariations(sessionRef.current, productId))
   ipcMain.handle('order:price', (_e, lines: PriceLine[], d: Discount) => priceOrder(lines, d))
-  ipcMain.handle('sync:now', () => pushPending(db, session, env.VITEPOS_OUTLET, env.VITEPOS_COUNTER))
-  ipcMain.handle('customer:search', (_e, q: string) => searchCustomers(session, q))
-  ipcMain.handle('customer:create', (_e, data: Record<string, unknown>) => createCustomer(session, data))
+  ipcMain.handle('sync:now', () => {
+    const { outlet, counter } = outletOf(db)
+    return pushPending(db, sessionRef.current, outlet, counter)
+  })
+  ipcMain.handle('customer:search', (_e, q: string) => searchCustomers(sessionRef.current, q))
+  ipcMain.handle('customer:create', (_e, data: Record<string, unknown>) => createCustomer(sessionRef.current, data))
   ipcMain.handle('orders:recent', () =>
     db.prepare(`SELECT id,token,total,payment_method,voided,synced,sync_error,created_at FROM orders ORDER BY id DESC LIMIT 25`).all(),
   )
   ipcMain.handle('print:test', async (_e, cfg: PrinterCfg) => {
     await printWithRetry(cfg, `*** TEST PRINT ***\n${cfg.station.toUpperCase()}\n${new Date().toLocaleString()}`)
+    return { ok: true }
+  })
+
+  // --- Settings ---
+  ipcMain.handle('settings:get', () => getSettings(db))
+  ipcMain.handle('settings:save', (_e, patch: Settings) => {
+    saveSettings(db, patch)
+    seedPrintersFromSettings(db, getSettings(db))
+    rebuildSession()
     return { ok: true }
   })
 
@@ -134,6 +153,8 @@ export function registerIpc(db: BetterSqlite3.Database, session: Session, env: R
           total: o.total,
           tender: o.tender,
           change: o.change,
+          orderType: o.order_type,
+          customerName: o.customer_name,
         }),
       )
     }
@@ -146,27 +167,27 @@ export function registerIpc(db: BetterSqlite3.Database, session: Session, env: R
   })
 }
 
-// Background loop: push locally-created orders to WooCommerce and pull website
-// orders to auto-print in the kitchen. Network errors are swallowed and retried.
-export function startSync(db: BetterSqlite3.Database, session: Session, env: Record<string, string>, notify: Notify) {
+// Background loop: push local orders to WooCommerce and pull website orders to the kitchen.
+export function startSync(db: BetterSqlite3.Database, sessionRef: SessionRef, notify: Notify) {
   const tick = async () => {
     try {
-      const res = await pushPending(db, session, env.VITEPOS_OUTLET, env.VITEPOS_COUNTER)
+      const { outlet, counter } = outletOf(db)
+      const res = await pushPending(db, sessionRef.current, outlet, counter)
       if (res.pushed) notify('sync:progress', res)
     } catch {
       /* offline — retry next tick */
     }
     try {
-      const fresh = await pollOnline(db, session)
+      const fresh = await pollOnline(db, sessionRef.current)
       for (const o of fresh) {
-        printReceiptAndTickets(db, o.token, o.items, null) // kitchen/bar only, no receipt
+        printReceiptAndTickets(db, o.token, o.items, null)
         notify('online:new', { token: o.token, total: o.total, items: o.items.length })
       }
     } catch {
       /* offline */
     }
   }
-  const interval = Number(env.SYNC_INTERVAL_MS ?? 15000)
+  const interval = Number(process.env.SYNC_INTERVAL_MS ?? 15000)
   setInterval(() => void tick(), interval)
   void tick()
 }
