@@ -32,6 +32,8 @@ VITEPOS_COUNTER=1
 PRINTER_COUNTER=tcp://<ip>:9100
 PRINTER_KITCHEN=tcp://<ip>:9100
 PRINTER_BAR=tcp://<ip>:9100
+POS_KIOSK=0            # 1 = fullscreen kiosk lockdown (ignored in dev)
+SYNC_INTERVAL_MS=15000 # background WC-sync + online-order poll cadence
 ```
 
 ## Printers
@@ -55,8 +57,28 @@ npx tsc -p tsconfig.json --noEmit # typecheck main/preload
 npx tsc -p tsconfig.web.json --noEmit
 ```
 
-## Not yet built (later phases)
+## Phase 2 + 3 (now included)
 
-- Phase 2: offline order queue + WooCommerce push, online-orders-to-kitchen (Pusher),
-  card terminal, variable-product variation picker, real per-category station mapping.
-- Phase 3: kiosk lockdown, auto-update, Windows installer (electron-builder).
+- **Offline queue → WooCommerce push**: orders save locally and push in the background
+  with retries (`order/sync-offline-order`); the Orders panel shows ✓ synced / ⏳ pending.
+- **Online orders → kitchen**: polls `order/online-list` (~every 15s) and auto-prints new
+  website orders to the kitchen/bar with an on-screen toast.
+- **Variable products**: tapping one opens a variation picker with real per-variation price.
+- **Card tender**: external terminal (records the method; the app is not the card processor).
+- **Void (with reason) + reprint** from the Orders panel.
+- **Kiosk lockdown**: `POS_KIOSK=1` → fullscreen, no menu. Single-instance enforced.
+- **Auto-update** via electron-updater (needs a publish feed set in the `build` config).
+
+> ⚠️ The **offline-sync and online-order payload field names are inferred** (no offline
+> order or website order existed live to confirm against). Verify on-site:
+> `npm run probe:sync` prints the payload (dry run); `VITEPOS_SYNC_CONFIRM=1 npm run probe:sync`
+> creates one real test order. Adjust `src/main/sync/orders.ts` / `online.ts` if rejected.
+
+## Build the Windows installer
+
+```bash
+npm run dist   # electron-vite build + electron-builder --win (NSIS) → dist/
+```
+
+Run on Windows (native modules rebuild for Electron there). For auto-update, add a
+`publish` target under `build` in package.json.

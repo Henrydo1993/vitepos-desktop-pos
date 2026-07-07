@@ -8,6 +8,12 @@ export interface MenuItem {
   type: string
 }
 
+export interface Variation {
+  id: number
+  name: string
+  price: number
+}
+
 export interface CartLine {
   product_id: number
   name: string

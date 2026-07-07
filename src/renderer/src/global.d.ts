@@ -1,17 +1,34 @@
-export {}
+import type { MenuItem, Variation } from './types'
 
 declare global {
   interface Window {
     pos: {
       syncCatalog: () => Promise<{ products: number; categories: number }>
-      menu: () => Promise<import('./types').MenuItem[]>
+      menu: () => Promise<MenuItem[]>
       printers: () => Promise<{ station: string; type: string; address: string }[]>
+      variations: (productId: number) => Promise<Variation[]>
       price: (
         lines: { price: number; qty: number; taxRate: number }[],
         d: { type: 'flat' | 'percent'; value: number } | null,
       ) => Promise<{ subtotal: number; discount: number; tax: number; total: number }>
       commit: (payload: unknown) => Promise<{ token: number; orderId: number }>
+      reprint: (orderId: number) => Promise<{ ok: boolean }>
+      voidOrder: (orderId: number, reason: string) => Promise<{ ok: boolean }>
+      recentOrders: () => Promise<
+        {
+          id: number
+          token: number
+          total: number
+          payment_method: string
+          voided: number
+          synced: number
+          sync_error: string | null
+          created_at: string
+        }[]
+      >
+      syncNow: () => Promise<{ pending: number; pushed: number }>
       testPrint: (cfg: { station: string; type: string; address: string }) => Promise<{ ok: boolean }>
+      onOnlineOrder: (cb: (data: { token: number; total: number; items: number }) => void) => () => void
     }
   }
 }

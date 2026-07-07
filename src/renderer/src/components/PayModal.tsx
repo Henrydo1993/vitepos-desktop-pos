@@ -22,9 +22,11 @@ export function PayModal({ onClose }: { onClose: () => void }) {
   if (!totals) return null
   const change = Math.max(0, tender - totals.total)
 
-  async function pay() {
+  async function submit(method: 'cash' | 'card') {
     if (!totals) return
     setBusy(true)
+    const paidTender = method === 'card' ? totals.total : tender
+    const paidChange = method === 'card' ? 0 : change
     try {
       const { token } = await window.pos.commit({
         items: lines.map((l) => ({
@@ -35,9 +37,10 @@ export function PayModal({ onClose }: { onClose: () => void }) {
           station: l.station,
           modifiers: l.modifiers,
         })),
-        totals: { ...totals, tender, change },
+        totals: { ...totals, tender: paidTender, change: paidChange },
+        paymentMethod: method,
       })
-      alert(`Order #${token} sent to kitchen. Change $${change.toFixed(2)}`)
+      alert(`Order #${token} sent to kitchen.${method === 'cash' ? ` Change $${paidChange.toFixed(2)}` : ''}`)
       clear()
       onClose()
     } catch (e) {
@@ -49,7 +52,7 @@ export function PayModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#0007', display: 'grid', placeItems: 'center' }}>
-      <div style={{ background: '#fff', padding: 24, borderRadius: 14, minWidth: 320 }}>
+      <div style={{ background: '#fff', padding: 24, borderRadius: 14, minWidth: 340 }}>
         <h2 style={{ margin: '0 0 8px' }}>Total ${totals.total.toFixed(2)}</h2>
         <div style={{ color: '#666', marginBottom: 12 }}>Tax ${totals.tax.toFixed(2)}</div>
         <input
@@ -62,18 +65,25 @@ export function PayModal({ onClose }: { onClose: () => void }) {
           style={{ width: '100%', fontSize: 20, padding: 10, marginBottom: 8 }}
         />
         <div style={{ fontSize: 18, marginBottom: 16 }}>Change ${change.toFixed(2)}</div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
           <button onClick={onClose} style={{ flex: 1, height: 48, borderRadius: 8, border: '1px solid #ccc', background: '#fff' }}>
             Cancel
           </button>
           <button
             disabled={busy || tender < totals.total}
-            onClick={pay}
+            onClick={() => submit('cash')}
             style={{ flex: 2, height: 48, borderRadius: 8, border: 'none', background: '#111', color: '#fff', fontWeight: 700 }}
           >
-            {busy ? '…' : 'Complete'}
+            {busy ? '…' : 'Cash'}
           </button>
         </div>
+        <button
+          disabled={busy}
+          onClick={() => submit('card')}
+          style={{ width: '100%', height: 48, borderRadius: 8, border: '1px solid #111', background: '#fff', fontWeight: 700 }}
+        >
+          Card (terminal)
+        </button>
       </div>
     </div>
   )

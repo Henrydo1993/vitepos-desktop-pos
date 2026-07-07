@@ -1,12 +1,22 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 
 const pos = {
   syncCatalog: () => ipcRenderer.invoke('catalog:sync'),
   menu: () => ipcRenderer.invoke('menu:list'),
   printers: () => ipcRenderer.invoke('printers:list'),
+  variations: (productId: number) => ipcRenderer.invoke('product:variations', productId),
   price: (lines: unknown[], d: unknown) => ipcRenderer.invoke('order:price', lines, d),
   commit: (payload: unknown) => ipcRenderer.invoke('order:commit', payload),
+  reprint: (orderId: number) => ipcRenderer.invoke('order:reprint', orderId),
+  voidOrder: (orderId: number, reason: string) => ipcRenderer.invoke('order:void', orderId, reason),
+  recentOrders: () => ipcRenderer.invoke('orders:recent'),
+  syncNow: () => ipcRenderer.invoke('sync:now'),
   testPrint: (cfg: unknown) => ipcRenderer.invoke('print:test', cfg),
+  onOnlineOrder: (cb: (data: { token: number; total: number; items: number }) => void) => {
+    const listener = (_e: IpcRendererEvent, data: { token: number; total: number; items: number }) => cb(data)
+    ipcRenderer.on('online:new', listener)
+    return () => ipcRenderer.removeListener('online:new', listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('pos', pos)

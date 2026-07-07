@@ -18,11 +18,13 @@ const STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT, token INTEGER, status TEXT NOT NULL,
       subtotal REAL, tax REAL, discount REAL, total REAL, tender REAL, change REAL,
-      created_at TEXT NOT NULL, synced INTEGER DEFAULT 0, remote_id INTEGER )`,
+      payment_method TEXT DEFAULT 'cash', voided INTEGER DEFAULT 0, void_reason TEXT,
+      created_at TEXT NOT NULL, synced INTEGER DEFAULT 0, remote_id INTEGER, sync_error TEXT )`,
   `CREATE TABLE IF NOT EXISTS order_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL,
       product_id INTEGER, name TEXT, qty INTEGER, price REAL, station TEXT,
       modifiers TEXT, FOREIGN KEY(order_id) REFERENCES orders(id) )`,
+  `CREATE TABLE IF NOT EXISTS seen_online (remote_id INTEGER PRIMARY KEY, seen_at TEXT)`,
   `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)`,
 ]
 
