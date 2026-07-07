@@ -26,7 +26,7 @@ async function main() {
   })
   save('login', { status: login.status, data: login.data })
 
-  const nonce = login.data?.data?.nonce ?? login.data?.nonce ?? ''
+  const nonce = login.data?.data?.wp_rest_nonce ?? login.data?.data?.nonce ?? ''
   const outletHeader = `${process.env.VITEPOS_OUTLET}|${process.env.VITEPOS_COUNTER}`
   const h = { 'X-WP-Nonce': nonce, 'vite-outlet': outletHeader }
 
