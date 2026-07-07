@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { CartLine, MenuItem } from '../types'
 
-export type OrderType = 'dine_in' | 'takeaway' | 'delivery'
+export type OrderType = 'table' | 'walk_in' | 'takeaway' | 'delivery'
 export type Discount = { type: 'flat' | 'percent'; value: number } | null
 export interface Customer {
   id: number
@@ -40,7 +40,7 @@ const RESET: Partial<CartState> = { lines: [], discount: null, note: '', custome
 export const useCart = create<CartState>((set) => ({
   lines: [],
   held: [],
-  orderType: 'dine_in',
+  orderType: 'walk_in',
   discount: null,
   note: '',
   customer: null,

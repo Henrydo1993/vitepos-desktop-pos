@@ -10,7 +10,8 @@ const isPhoto = (img: string | null) => !!img && !/placeholder/i.test(img)
 const initials = (n: string) =>
   n.trim().split(/\s+/).slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase()
 const OTYPES: { k: OrderType; label: string }[] = [
-  { k: 'dine_in', label: 'Dine-in' },
+  { k: 'table', label: 'Table' },
+  { k: 'walk_in', label: 'Walk-in' },
   { k: 'takeaway', label: 'Takeaway' },
   { k: 'delivery', label: 'Delivery' },
 ]
