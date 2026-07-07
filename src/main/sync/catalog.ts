@@ -26,20 +26,35 @@ export function normalizeProduct(raw: any) {
   }
 }
 
+// Unwrap the various response envelopes Vitepos uses (bare array, {rowdata}, {data}).
+const toArray = (v: any): any[] => (Array.isArray(v) ? v : (v?.rowdata ?? v?.categories ?? v?.data ?? []))
+
 export async function syncCatalog(db: Database.Database, s: Session) {
-  const cats = (await fetchCategories(s)) ?? []
-  const insCats = db.transaction((rows: any[]) =>
-    rows.forEach((c) =>
-      upsertCategory(db, { id: Number(c.id), name: String(c.name), parent_id: Number(c.parent ?? 0) || null }),
-    ),
-  )
-  insCats(cats)
+  // Products are the only required sync; categories + taxes are best-effort.
+  let categoryCount = 0
+  try {
+    const cats = toArray(await fetchCategories(s))
+    if (cats.length) {
+      const insCats = db.transaction((rows: any[]) =>
+        rows.forEach((c) =>
+          upsertCategory(db, {
+            id: Number(c.id ?? c.term_id),
+            name: String(c.name ?? ''),
+            parent_id: Number(c.parent_id ?? c.parent ?? 0) || null,
+          }),
+        ),
+      )
+      insCats(cats)
+      categoryCount = cats.length
+    }
+  } catch {
+    /* categories endpoint optional */
+  }
 
   let page = 1
   let total = 0
   for (;;) {
-    const res = await fetchProducts(s, page, 100)
-    const rows: any[] = res?.rowdata ?? res ?? []
+    const rows = toArray(await fetchProducts(s, page, 100))
     if (!rows.length) break
     const ins = db.transaction((rs: any[]) => rs.forEach((p) => upsertProduct(db, normalizeProduct(p))))
     ins(rows)
@@ -48,18 +63,24 @@ export async function syncCatalog(db: Database.Database, s: Session) {
     page++
   }
 
-  const taxes = (await fetchTaxes(s)) ?? []
-  const insTax = db.transaction((rows: any[]) =>
-    rows.forEach((t: any) =>
-      db
-        .prepare(`INSERT INTO taxes (tax_class,rate) VALUES (?,?) ON CONFLICT(tax_class) DO UPDATE SET rate=excluded.rate`)
-        .run(String(t.tax_class ?? t.slug ?? 'standard'), Number(t.rate ?? 0)),
-    ),
-  )
-  insTax(taxes)
+  try {
+    const taxes = toArray(await fetchTaxes(s))
+    if (taxes.length) {
+      const insTax = db.transaction((rows: any[]) =>
+        rows.forEach((t: any) =>
+          db
+            .prepare(`INSERT INTO taxes (tax_class,rate) VALUES (?,?) ON CONFLICT(tax_class) DO UPDATE SET rate=excluded.rate`)
+            .run(String(t.tax_class ?? t.slug ?? 'standard'), Number(t.rate ?? 0)),
+        ),
+      )
+      insTax(taxes)
+    }
+  } catch {
+    /* taxes optional */
+  }
 
   db.prepare(`INSERT INTO meta (key,value) VALUES ('last_sync',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(
     new Date().toISOString(),
   )
-  return { products: total, categories: cats.length }
+  return { products: total, categories: categoryCount }
 }

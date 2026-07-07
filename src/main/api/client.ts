@@ -6,7 +6,8 @@ export const NS = 'vitepos/v1'
 export const rr = (route: string) => `/?rest_route=/${NS}/${route}`
 
 export async function fetchCategories(s: Session) {
-  return (await s.http.post(rr('product/all-categories'), { limit: 500 })).data?.data
+  // GET (POST returns 404 on this install); returns [{ id, name, slug, parent_id }].
+  return (await s.http.get(rr('product/all-categories'))).data?.data
 }
 
 export async function fetchProducts(s: Session, page = 1, limit = 100) {
