@@ -51,37 +51,29 @@ export function PayModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#0007', display: 'grid', placeItems: 'center' }}>
-      <div style={{ background: '#fff', padding: 24, borderRadius: 14, minWidth: 340 }}>
-        <h2 style={{ margin: '0 0 8px' }}>Total ${totals.total.toFixed(2)}</h2>
-        <div style={{ color: '#666', marginBottom: 12 }}>Tax ${totals.tax.toFixed(2)}</div>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+        <h2 className="modal-title">Total ${totals.total.toFixed(2)}</h2>
+        <div style={{ color: 'var(--vt-text-2)', marginBottom: 12 }}>Tax ${totals.tax.toFixed(2)}</div>
         <input
+          className="pay-input"
           type="number"
           inputMode="decimal"
           placeholder="Cash tendered"
           value={tender || ''}
           onChange={(e) => setTender(Number(e.target.value))}
           autoFocus
-          style={{ width: '100%', fontSize: 20, padding: 10, marginBottom: 8 }}
         />
-        <div style={{ fontSize: 18, marginBottom: 16 }}>Change ${change.toFixed(2)}</div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-          <button onClick={onClose} style={{ flex: 1, height: 48, borderRadius: 8, border: '1px solid #ccc', background: '#fff' }}>
+        <div style={{ fontSize: 18, marginBottom: 16, color: 'var(--vt-ink)' }}>Change ${change.toFixed(2)}</div>
+        <div className="btn-row" style={{ marginBottom: 8 }}>
+          <button className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button
-            disabled={busy || tender < totals.total}
-            onClick={() => submit('cash')}
-            style={{ flex: 2, height: 48, borderRadius: 8, border: 'none', background: '#111', color: '#fff', fontWeight: 700 }}
-          >
+          <button className="btn btn-pay" style={{ flex: 2 }} disabled={busy || tender < totals.total} onClick={() => submit('cash')}>
             {busy ? '…' : 'Cash'}
           </button>
         </div>
-        <button
-          disabled={busy}
-          onClick={() => submit('card')}
-          style={{ width: '100%', height: 48, borderRadius: 8, border: '1px solid #111', background: '#fff', fontWeight: 700 }}
-        >
+        <button className="btn btn-theme" style={{ width: '100%' }} disabled={busy} onClick={() => submit('card')}>
           Card (terminal)
         </button>
       </div>

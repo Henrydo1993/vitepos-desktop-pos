@@ -29,25 +29,23 @@ export default function App() {
   }, [])
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', height: '100vh' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <div style={{ padding: '10px 14px', borderBottom: '1px solid #eee', fontSize: 13, color: '#555', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <strong>Opal Dessert — Front Counter</strong>
-          <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+    <div className="pos-app">
+      <div className="pos-main">
+        <div className="pos-topbar">
+          <span className="brand">Opal Dessert · Front Counter</span>
+          <span className="meta">
             <span>{status}</span>
-            <button onClick={() => setShowOrders(true)}>Orders</button>
+            <button className="btn btn-sm" onClick={() => setShowOrders(true)}>
+              Orders
+            </button>
           </span>
         </div>
-        {ready ? <MenuGrid /> : <div style={{ padding: 24, color: '#777' }}>{status}</div>}
+        {ready ? <MenuGrid /> : <div style={{ padding: 24, color: 'var(--vt-text-2)' }}>{status}</div>}
       </div>
       <CartPanel onPay={() => setPaying(true)} />
       {paying && <PayModal onClose={() => setPaying(false)} />}
       {showOrders && <RecentOrdersModal onClose={() => setShowOrders(false)} />}
-      {toast && (
-        <div style={{ position: 'fixed', bottom: 20, left: 20, background: '#111', color: '#fff', padding: '12px 18px', borderRadius: 10, fontWeight: 600, boxShadow: '0 4px 16px #0003' }}>
-          {toast}
-        </div>
-      )}
+      {toast && <div className="toast">{toast}</div>}
     </div>
   )
 }
