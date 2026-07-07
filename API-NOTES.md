@@ -34,9 +34,21 @@ credentials are in `.env`.
 | Cash drawer | GET | `outlet/cash-drawer-info`, `outlet/close-drawer`, `outlet/withdraw-cash` |
 | Heartbeat | GET | `system/heart-bit` |
 
-## Open items (need credentials to confirm)
+## Resolved (verified live)
 
-- Login request field names (`user_login`/`user_pass` assumed) and where the nonce sits in the response.
-- Auth mechanism specifics (WP cookie + `X-WP-Nonce`) end-to-end.
-- Product/category/tax JSON field names → finalize `normalizeProduct` in `src/main/sync/catalog.ts`.
-- Real `outlet_id` / `counter_id` values (from `outlet/all-outlet-list` or Vitepos admin).
+- **Auth = WordPress Application Password over HTTP Basic** (`Authorization: Basic base64(user:app_pass)`).
+  Cookie + `wp_rest` nonce does **not** authenticate headlessly here (WP core `users/me` → `rest_not_logged_in`;
+  `user/login` sets no cookie). See `src/main/api/auth.ts` (`makeSession`).
+- **Outlet / Counter:** Opal Dessert = `1`, Front Counter = `1` → header `vite-outlet: 1|1`.
+- **`user/login`** (body `user_login` / `user_pass`) works and returns `data.wp_rest_nonce` + `data.outlets`
+  (the browser/PWA path) — kept for reference, not used for headless auth.
+- **Product shape** (`product/list` → `data.rowdata[]`): `id`, `name` (HTML-encoded), `price` (string),
+  `sku`, `categories` (array of name strings), `taxable` (`Y`/`N`), `tax_rate`, `is_hidden` (`Y`/`N`),
+  `type` (`simple`/`variable`), `addons`. Mapper finalized in `src/main/sync/catalog.ts`.
+- **Taxes** (`product/all-taxes`): returns tax *class* names/slugs only (no rates). Price from each product's
+  own `taxable` + `tax_rate`.
+
+## Open (Phase 2)
+
+- Variable products (`type: "variable"`) need variation selection + per-variation pricing
+  (`product/list-variation` or `product/details/{id}`). The current live menu (e.g. CHA GIO) is variable.
