@@ -18,6 +18,9 @@ const pos = {
   testPrint: (cfg: unknown) => ipcRenderer.invoke('print:test', cfg),
   appInfo: () => ipcRenderer.invoke('app:info'),
   markSeen: () => ipcRenderer.invoke('app:markSeen'),
+  pinStatus: () => ipcRenderer.invoke('pin:status'),
+  pinSet: (pin: string) => ipcRenderer.invoke('pin:set', pin),
+  pinVerify: (pin: string) => ipcRenderer.invoke('pin:verify', pin),
   onOnlineOrder: (cb: (data: { token: number; total: number; items: number }) => void) => {
     const listener = (_e: IpcRendererEvent, data: { token: number; total: number; items: number }) => cb(data)
     ipcRenderer.on('online:new', listener)

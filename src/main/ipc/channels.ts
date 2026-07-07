@@ -1,4 +1,5 @@
 import { ipcMain, app } from 'electron'
+import { createHash } from 'node:crypto'
 import type BetterSqlite3 from 'better-sqlite3'
 import type { Session } from '../api/auth'
 import { listMenu } from '../db/repo'
@@ -91,6 +92,19 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
       app.getVersion(),
     )
     return { ok: true }
+  })
+
+  // --- Local unlock PIN (sha-256 in meta; unlocks the till without the WP password) ---
+  const sha = (s: string) => createHash('sha256').update(s).digest('hex')
+  const pinHash = () => (db.prepare("SELECT value FROM meta WHERE key='pin_hash'").get() as { value?: string } | undefined)?.value
+  ipcMain.handle('pin:status', () => ({ set: !!pinHash() }))
+  ipcMain.handle('pin:set', (_e, pin: string) => {
+    db.prepare("INSERT INTO meta (key,value) VALUES ('pin_hash',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(sha(String(pin)))
+    return { ok: true }
+  })
+  ipcMain.handle('pin:verify', (_e, pin: string) => {
+    const h = pinHash()
+    return { ok: !!h && h === sha(String(pin)) }
   })
 
   // --- Settings ---

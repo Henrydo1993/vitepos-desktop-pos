@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { useCart, type OrderType } from '../state/cart'
 import { DiscountModal } from './DiscountModal'
 import { CustomerModal } from './CustomerModal'
+import { FeeModal } from './FeeModal'
+import { CalculatorModal } from './CalculatorModal'
+import { HeldOrdersModal } from './HeldOrdersModal'
 
 const isPhoto = (img: string | null) => !!img && !/placeholder/i.test(img)
 const initials = (n: string) =>
@@ -13,11 +16,14 @@ const OTYPES: { k: OrderType; label: string }[] = [
 ]
 
 export function CartPanel({ onPay }: { onPay: () => void }) {
-  const { lines, orderType, setOrderType, discount, note, setNote, customer, setCustomer, setQty, changeQty, clear, hold } =
+  const { lines, held, orderType, setOrderType, discount, note, setNote, customer, setCustomer, fee, setQty, changeQty, clear, hold } =
     useCart()
   const [now, setNow] = useState(() => new Date())
   const [showDisc, setShowDisc] = useState(false)
   const [showCust, setShowCust] = useState(false)
+  const [showFee, setShowFee] = useState(false)
+  const [showCalc, setShowCalc] = useState(false)
+  const [showHeld, setShowHeld] = useState(false)
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000)
@@ -27,7 +33,7 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
   const subtotal = lines.reduce((s, l) => s + l.price * l.qty, 0)
   const qtyTotal = lines.reduce((s, l) => s + l.qty, 0)
   const discAmt = discount ? (discount.type === 'flat' ? discount.value : (subtotal * discount.value) / 100) : 0
-  const net = Math.max(0, subtotal - discAmt)
+  const net = Math.max(0, subtotal - discAmt) + fee
   const when = now.toLocaleString('en-AU', {
     weekday: 'short',
     day: '2-digit',
@@ -105,9 +111,18 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
-        <div className="foot-actions">
+        <div className="foot-actions" style={{ flexWrap: 'wrap', gap: 6 }}>
           <button className="pill" onClick={() => setShowDisc(true)}>
             − Discount{discAmt ? ` ($${discAmt.toFixed(2)})` : ''}
+          </button>
+          <button className="pill" onClick={() => setShowFee(true)}>
+            ＋ Fee{fee ? ` ($${fee.toFixed(2)})` : ''}
+          </button>
+          <button className="pill" onClick={() => setShowCalc(true)}>
+            🧮 Calc
+          </button>
+          <button className="pill" onClick={() => setShowHeld(true)}>
+            ✋ Held{held.length ? ` (${held.length})` : ''}
           </button>
         </div>
         <div className="cust-row">
@@ -141,8 +156,11 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
         </div>
       </div>
 
-      {showDisc && <DiscountModal onClose={() => setShowDisc(false)} />}
+      {showDisc && <DiscountModal subtotal={subtotal} onClose={() => setShowDisc(false)} />}
       {showCust && <CustomerModal onClose={() => setShowCust(false)} />}
+      {showFee && <FeeModal onClose={() => setShowFee(false)} />}
+      {showCalc && <CalculatorModal onClose={() => setShowCalc(false)} />}
+      {showHeld && <HeldOrdersModal onClose={() => setShowHeld(false)} />}
     </div>
   )
 }

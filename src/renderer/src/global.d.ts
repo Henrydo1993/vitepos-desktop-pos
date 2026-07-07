@@ -36,6 +36,9 @@ declare global {
       testPrint: (cfg: { station: string; type: string; address: string }) => Promise<{ ok: boolean }>
       appInfo: () => Promise<{ version: string; lastSeen: string }>
       markSeen: () => Promise<{ ok: boolean }>
+      pinStatus: () => Promise<{ set: boolean }>
+      pinSet: (pin: string) => Promise<{ ok: boolean }>
+      pinVerify: (pin: string) => Promise<{ ok: boolean }>
       onOnlineOrder: (cb: (data: { token: number; total: number; items: number }) => void) => () => void
     }
   }

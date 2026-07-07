@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { CartPanel } from './components/CartPanel'
 import { ProductArea } from './components/ProductArea'
-import { PayModal } from './components/PayModal'
+import { Checkout } from './components/Checkout'
+import { LockScreen } from './components/LockScreen'
 import { RecentOrdersModal } from './components/RecentOrdersModal'
 import { SettingsModal } from './components/SettingsModal'
 import { VirtualKeyboard } from './components/VirtualKeyboard'
@@ -14,12 +15,14 @@ export default function App() {
   const [firstRun, setFirstRun] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [version, setVersion] = useState('')
+  const [locked, setLocked] = useState(true)
 
   useEffect(() => {
     window.pos.getSettings().then((s) => {
       if (!s.app_password?.trim()) {
         setFirstRun(true)
         setShowSettings(true)
+        setLocked(false) // let a brand-new till finish setup before it locks
       }
     })
   }, [])
@@ -37,6 +40,23 @@ export default function App() {
     })
   }, [])
 
+  // Auto-lock the till after 3 minutes of no touch/mouse/key activity.
+  useEffect(() => {
+    if (locked) return
+    let t: ReturnType<typeof setTimeout>
+    const reset = () => {
+      clearTimeout(t)
+      t = setTimeout(() => setLocked(true), 3 * 60 * 1000)
+    }
+    const evs = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'wheel'] as const
+    evs.forEach((e) => window.addEventListener(e, reset, { passive: true }))
+    reset()
+    return () => {
+      clearTimeout(t)
+      evs.forEach((e) => window.removeEventListener(e, reset))
+    }
+  }, [locked])
+
   useEffect(() => {
     return window.pos.onOnlineOrder((d) => {
       setToast(`New online order #${d.token} → kitchen`)
@@ -48,8 +68,7 @@ export default function App() {
     <div className="pos-shell">
       <Sidebar version={version} onOrders={() => setShowOrders(true)} onSettings={() => setShowSettings(true)} />
       <CartPanel onPay={() => setPaying(true)} />
-      <ProductArea />
-      {paying && <PayModal onClose={() => setPaying(false)} />}
+      {paying ? <Checkout onClose={() => setPaying(false)} /> : <ProductArea />}
       {showOrders && <RecentOrdersModal onClose={() => setShowOrders(false)} />}
       {showSettings && (
         <SettingsModal
@@ -62,6 +81,7 @@ export default function App() {
       )}
       {toast && <div className="toast">{toast}</div>}
       <VirtualKeyboard />
+      {locked && <LockScreen onUnlock={() => setLocked(false)} />}
     </div>
   )
 }

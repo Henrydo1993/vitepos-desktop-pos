@@ -20,6 +20,7 @@ interface CartState {
   discount: Discount
   note: string
   customer: Customer | null
+  fee: number
   add: (m: MenuItem) => void
   setQty: (i: number, qty: number) => void
   changeQty: (i: number, d: number) => void
@@ -30,9 +31,11 @@ interface CartState {
   setDiscount: (d: Discount) => void
   setNote: (n: string) => void
   setCustomer: (c: Customer | null) => void
+  setFee: (n: number) => void
+  discardHeld: (i: number) => void
 }
 
-const RESET: Partial<CartState> = { lines: [], discount: null, note: '', customer: null }
+const RESET: Partial<CartState> = { lines: [], discount: null, note: '', customer: null, fee: 0 }
 
 export const useCart = create<CartState>((set) => ({
   lines: [],
@@ -41,6 +44,7 @@ export const useCart = create<CartState>((set) => ({
   discount: null,
   note: '',
   customer: null,
+  fee: 0,
   add: (m) =>
     set((s) => {
       const idx = s.lines.findIndex((l) => l.product_id === m.id)
@@ -85,4 +89,6 @@ export const useCart = create<CartState>((set) => ({
   setDiscount: (d) => set({ discount: d }),
   setNote: (n) => set({ note: n }),
   setCustomer: (c) => set({ customer: c }),
+  setFee: (n) => set({ fee: Math.max(0, n || 0) }),
+  discardHeld: (i) => set((s) => ({ held: s.held.filter((_, j) => j !== i) })),
 }))
