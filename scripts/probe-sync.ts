@@ -32,6 +32,7 @@ const order = {
   void_reason: null,
   order_type: 'takeaway',
   note: null,
+  customer_id: null,
   created_at: new Date().toISOString(),
 }
 const items = [{ product_id: 16, name: 'CHA GIO (POS test)', qty: 1, price: 13.9 }]

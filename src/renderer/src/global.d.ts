@@ -27,6 +27,10 @@ declare global {
         }[]
       >
       syncNow: () => Promise<{ pending: number; pushed: number }>
+      searchCustomers: (q: string) => Promise<
+        { id: number; first_name?: string; last_name?: string; username?: string; email?: string; contact_no?: string }[]
+      >
+      createCustomer: (data: Record<string, unknown>) => Promise<{ ok: boolean; data: any }>
       testPrint: (cfg: { station: string; type: string; address: string }) => Promise<{ ok: boolean }>
       onOnlineOrder: (cb: (data: { token: number; total: number; items: number }) => void) => () => void
     }

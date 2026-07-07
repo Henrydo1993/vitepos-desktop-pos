@@ -35,3 +35,13 @@ export async function syncOfflineOrder(s: Session, payload: unknown) {
   const res = await s.http.post(rr('order/sync-offline-order'), payload)
   return { status: res.status, ok: res.data?.status === true, data: res.data }
 }
+
+export async function searchCustomers(s: Session, search = '') {
+  const res = await s.http.post(rr('customer/list'), { search, keyword: search, limit: 20, page: 1 })
+  return (res.data?.data?.rowdata ?? res.data?.data ?? []) as any[]
+}
+
+export async function createCustomer(s: Session, data: Record<string, unknown>) {
+  const res = await s.http.post(rr('customer/create'), data)
+  return { ok: res.data?.status === true, data: res.data?.data ?? res.data }
+}

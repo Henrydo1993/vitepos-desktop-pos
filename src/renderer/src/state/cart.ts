@@ -3,6 +3,10 @@ import type { CartLine, MenuItem } from '../types'
 
 export type OrderType = 'dine_in' | 'takeaway' | 'delivery'
 export type Discount = { type: 'flat' | 'percent'; value: number } | null
+export interface Customer {
+  id: number
+  name: string
+}
 
 const stationOf = (m: MenuItem): string =>
   /drink|beverage|coffee|tea|juice|soda|bar|smoothie|latte|shake|water|che\b/i.test(`${m.category ?? ''} ${m.name}`)
@@ -15,6 +19,7 @@ interface CartState {
   orderType: OrderType
   discount: Discount
   note: string
+  customer: Customer | null
   add: (m: MenuItem) => void
   setQty: (i: number, qty: number) => void
   changeQty: (i: number, d: number) => void
@@ -24,7 +29,10 @@ interface CartState {
   setOrderType: (t: OrderType) => void
   setDiscount: (d: Discount) => void
   setNote: (n: string) => void
+  setCustomer: (c: Customer | null) => void
 }
+
+const RESET: Partial<CartState> = { lines: [], discount: null, note: '', customer: null }
 
 export const useCart = create<CartState>((set) => ({
   lines: [],
@@ -32,6 +40,7 @@ export const useCart = create<CartState>((set) => ({
   orderType: 'dine_in',
   discount: null,
   note: '',
+  customer: null,
   add: (m) =>
     set((s) => {
       const idx = s.lines.findIndex((l) => l.product_id === m.id)
@@ -69,10 +78,11 @@ export const useCart = create<CartState>((set) => ({
       lines[i] = { ...lines[i], qty: Math.max(0, lines[i].qty + d) }
       return { lines: lines.filter((l) => l.qty > 0) }
     }),
-  clear: () => set({ lines: [], discount: null, note: '' }),
-  hold: () => set((s) => (s.lines.length ? { held: [...s.held, s.lines], lines: [], discount: null, note: '' } : s)),
+  clear: () => set({ ...RESET }),
+  hold: () => set((s) => (s.lines.length ? { held: [...s.held, s.lines], ...RESET } : s)),
   recall: (i) => set((s) => ({ lines: s.held[i], held: s.held.filter((_, j) => j !== i) })),
   setOrderType: (t) => set({ orderType: t }),
   setDiscount: (d) => set({ discount: d }),
   setNote: (n) => set({ note: n }),
+  setCustomer: (c) => set({ customer: c }),
 }))

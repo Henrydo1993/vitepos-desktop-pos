@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useCart, type OrderType } from '../state/cart'
 import { DiscountModal } from './DiscountModal'
+import { CustomerModal } from './CustomerModal'
 
 const isPhoto = (img: string | null) => !!img && !/placeholder/i.test(img)
 const initials = (n: string) =>
@@ -12,9 +13,11 @@ const OTYPES: { k: OrderType; label: string }[] = [
 ]
 
 export function CartPanel({ onPay }: { onPay: () => void }) {
-  const { lines, orderType, setOrderType, discount, note, setNote, setQty, changeQty, clear, hold } = useCart()
+  const { lines, orderType, setOrderType, discount, note, setNote, customer, setCustomer, setQty, changeQty, clear, hold } =
+    useCart()
   const [now, setNow] = useState(() => new Date())
   const [showDisc, setShowDisc] = useState(false)
+  const [showCust, setShowCust] = useState(false)
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000)
@@ -107,6 +110,26 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
             − Discount{discAmt ? ` ($${discAmt.toFixed(2)})` : ''}
           </button>
         </div>
+        <div className="cust-row">
+          <div className="cust" style={{ cursor: 'pointer' }} onClick={() => setShowCust(true)}>
+            {customer ? (
+              <>
+                👤 {customer.name}
+                <span
+                  style={{ marginLeft: 'auto', cursor: 'pointer', padding: '0 4px' }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setCustomer(null)
+                  }}
+                >
+                  ✕
+                </span>
+              </>
+            ) : (
+              '＋ Add / Search Customer…'
+            )}
+          </div>
+        </div>
         <div className="hold-pay">
           <button className="hold-btn" onClick={hold} disabled={!lines.length}>
             ✋ Hold
@@ -119,6 +142,7 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
       </div>
 
       {showDisc && <DiscountModal onClose={() => setShowDisc(false)} />}
+      {showCust && <CustomerModal onClose={() => setShowCust(false)} />}
     </div>
   )
 }

@@ -29,10 +29,12 @@ export function buildReceipt(o: {
   tender: number
   change: number
   orderType?: string
+  customerName?: string
 }): string {
   const money = (n: number) => `$${n.toFixed(2)}`
   const lines = ['RECEIPT', `TOKEN #${o.token}`]
   if (o.orderType) lines.push(o.orderType.replace('_', '-').toUpperCase())
+  if (o.customerName) lines.push(`Customer: ${o.customerName}`)
   lines.push('--------------------------------')
   for (const it of o.items) lines.push(`${it.qty} x ${it.name}  ${money(it.price * it.qty)}`)
   lines.push(

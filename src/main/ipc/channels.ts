@@ -3,7 +3,7 @@ import type BetterSqlite3 from 'better-sqlite3'
 import type { Session } from '../api/auth'
 import { listMenu } from '../db/repo'
 import { syncCatalog } from '../sync/catalog'
-import { fetchVariations } from '../api/client'
+import { fetchVariations, searchCustomers, createCustomer } from '../api/client'
 import { pushPending } from '../sync/orders'
 import { pollOnline } from '../sync/online'
 import { priceOrder, type PriceLine, type Discount } from '../order/pricing'
@@ -20,6 +20,8 @@ interface CommitPayload {
   paymentMethod?: string
   orderType?: string
   note?: string
+  customerId?: number
+  customerName?: string
 }
 
 function printersOf(db: BetterSqlite3.Database): Record<string, PrinterCfg> {
@@ -32,13 +34,15 @@ function printReceiptAndTickets(
   token: number,
   items: PricedItem[],
   totals: { subtotal: number; discount: number; tax: number; total: number; tender: number; change: number } | null,
-  meta: { orderType?: string; note?: string } = {},
+  meta: { orderType?: string; note?: string; customerName?: string } = {},
 ) {
   const byStation = printersOf(db)
   if (totals && byStation.counter) {
-    void printWithRetry(byStation.counter, buildReceipt({ token, items, ...totals, orderType: meta.orderType }), {
-      kickDrawer: true,
-    })
+    void printWithRetry(
+      byStation.counter,
+      buildReceipt({ token, items, ...totals, orderType: meta.orderType, customerName: meta.customerName }),
+      { kickDrawer: true },
+    )
   }
   for (const [station, list] of Object.entries(routeByStation(items))) {
     const cfg = byStation[station]
@@ -57,6 +61,8 @@ export function registerIpc(db: BetterSqlite3.Database, session: Session, env: R
   ipcMain.handle('product:variations', (_e, productId: number) => fetchVariations(session, productId))
   ipcMain.handle('order:price', (_e, lines: PriceLine[], d: Discount) => priceOrder(lines, d))
   ipcMain.handle('sync:now', () => pushPending(db, session, env.VITEPOS_OUTLET, env.VITEPOS_COUNTER))
+  ipcMain.handle('customer:search', (_e, q: string) => searchCustomers(session, q))
+  ipcMain.handle('customer:create', (_e, data: Record<string, unknown>) => createCustomer(session, data))
   ipcMain.handle('orders:recent', () =>
     db.prepare(`SELECT id,token,total,payment_method,voided,synced,sync_error,created_at FROM orders ORDER BY id DESC LIMIT 25`).all(),
   )
@@ -71,8 +77,8 @@ export function registerIpc(db: BetterSqlite3.Database, session: Session, env: R
     ).t
     const info = db
       .prepare(
-        `INSERT INTO orders (token,status,subtotal,tax,discount,total,tender,change,payment_method,order_type,note,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO orders (token,status,subtotal,tax,discount,total,tender,change,payment_method,order_type,note,customer_id,customer_name,created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         token,
@@ -86,6 +92,8 @@ export function registerIpc(db: BetterSqlite3.Database, session: Session, env: R
         payload.paymentMethod ?? 'cash',
         payload.orderType ?? 'takeaway',
         payload.note ?? '',
+        payload.customerId ?? null,
+        payload.customerName ?? null,
         new Date().toISOString(),
       )
     const oid = info.lastInsertRowid as number
@@ -95,7 +103,11 @@ export function registerIpc(db: BetterSqlite3.Database, session: Session, env: R
     for (const it of payload.items) {
       insItem.run(oid, it.product_id, it.name, it.qty, it.price, it.station, JSON.stringify(it.modifiers ?? []))
     }
-    printReceiptAndTickets(db, token, payload.items, payload.totals, { orderType: payload.orderType, note: payload.note })
+    printReceiptAndTickets(db, token, payload.items, payload.totals, {
+      orderType: payload.orderType,
+      note: payload.note,
+      customerName: payload.customerName,
+    })
     return { token, orderId: oid }
   })
 

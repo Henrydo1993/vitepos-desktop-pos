@@ -9,7 +9,7 @@ interface Totals {
 }
 
 export function PayModal({ onClose }: { onClose: () => void }) {
-  const { lines, orderType, discount, note, clear } = useCart()
+  const { lines, orderType, discount, note, customer, clear } = useCart()
   const [totals, setTotals] = useState<Totals | null>(null)
   const [tender, setTender] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -41,6 +41,8 @@ export function PayModal({ onClose }: { onClose: () => void }) {
         paymentMethod: method,
         orderType,
         note,
+        customerId: customer?.id,
+        customerName: customer?.name,
       })
       alert(`Order #${token} sent to kitchen.${method === 'cash' ? ` Change $${paidChange.toFixed(2)}` : ''}`)
       clear()
