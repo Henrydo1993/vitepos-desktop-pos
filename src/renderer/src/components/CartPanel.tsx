@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react'
-import { useCart } from '../state/cart'
+import { useCart, type OrderType } from '../state/cart'
+import { DiscountModal } from './DiscountModal'
 
 const isPhoto = (img: string | null) => !!img && !/placeholder/i.test(img)
 const initials = (n: string) =>
   n.trim().split(/\s+/).slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase()
+const OTYPES: { k: OrderType; label: string }[] = [
+  { k: 'dine_in', label: 'Dine-in' },
+  { k: 'takeaway', label: 'Takeaway' },
+  { k: 'delivery', label: 'Delivery' },
+]
 
 export function CartPanel({ onPay }: { onPay: () => void }) {
-  const { lines, setQty, changeQty, clear, hold } = useCart()
+  const { lines, orderType, setOrderType, discount, note, setNote, setQty, changeQty, clear, hold } = useCart()
   const [now, setNow] = useState(() => new Date())
+  const [showDisc, setShowDisc] = useState(false)
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000)
@@ -16,6 +23,8 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
 
   const subtotal = lines.reduce((s, l) => s + l.price * l.qty, 0)
   const qtyTotal = lines.reduce((s, l) => s + l.qty, 0)
+  const discAmt = discount ? (discount.type === 'flat' ? discount.value : (subtotal * discount.value) / 100) : 0
+  const net = Math.max(0, subtotal - discAmt)
   const when = now.toLocaleString('en-AU', {
     weekday: 'short',
     day: '2-digit',
@@ -27,6 +36,14 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
 
   return (
     <div className="cart">
+      <div className="otype-bar">
+        {OTYPES.map((o) => (
+          <button key={o.k} className={`otype${orderType === o.k ? ' on' : ''}`} onClick={() => setOrderType(o.k)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+
       <div className="cart-top">
         <span className="num"># {lines.length ? 1 : 0}</span>
         <button className="icon-btn danger" onClick={clear} title="Clear order" disabled={!lines.length}>
@@ -75,29 +92,33 @@ export function CartPanel({ onPay }: { onPay: () => void }) {
       <div className="cart-foot">
         <div className="tot">
           <span>
-            Total (Items: {lines.length} and quantity: {qtyTotal})
+            Total (Items: {lines.length} · Qty: {qtyTotal})
           </span>
-          <b>${subtotal.toFixed(2)}</b>
+          <b>${net.toFixed(2)}</b>
         </div>
+        <input
+          className="note-input"
+          placeholder="Order note (prints to kitchen)…"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
         <div className="foot-actions">
-          <button className="pill">− Discount</button>
-          <button className="pill">＋ Fee</button>
-          <button className="pill icon-only" title="Order note">✎</button>
-          <button className="pill icon-only" title="Calculator">🧮</button>
-        </div>
-        <div className="cust-row">
-          <div className="cust">＋ Add / Search Customer…</div>
+          <button className="pill" onClick={() => setShowDisc(true)}>
+            − Discount{discAmt ? ` ($${discAmt.toFixed(2)})` : ''}
+          </button>
         </div>
         <div className="hold-pay">
           <button className="hold-btn" onClick={hold} disabled={!lines.length}>
             ✋ Hold
           </button>
           <button className="pay-btn" onClick={onPay} disabled={!lines.length}>
-            <span>${subtotal.toFixed(2)}</span>
+            <span>${net.toFixed(2)}</span>
             <span>Pay Now ▸</span>
           </button>
         </div>
       </div>
+
+      {showDisc && <DiscountModal onClose={() => setShowDisc(false)} />}
     </div>
   )
 }

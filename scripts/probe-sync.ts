@@ -30,6 +30,8 @@ const order = {
   payment_method: 'cash',
   voided: 0,
   void_reason: null,
+  order_type: 'takeaway',
+  note: null,
   created_at: new Date().toISOString(),
 }
 const items = [{ product_id: 16, name: 'CHA GIO (POS test)', qty: 1, price: 13.9 }]

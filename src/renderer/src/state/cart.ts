@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import type { CartLine, MenuItem } from '../types'
 
+export type OrderType = 'dine_in' | 'takeaway' | 'delivery'
+export type Discount = { type: 'flat' | 'percent'; value: number } | null
+
 const stationOf = (m: MenuItem): string =>
   /drink|beverage|coffee|tea|juice|soda|bar|smoothie|latte|shake|water|che\b/i.test(`${m.category ?? ''} ${m.name}`)
     ? 'bar'
@@ -9,17 +12,26 @@ const stationOf = (m: MenuItem): string =>
 interface CartState {
   lines: CartLine[]
   held: CartLine[][]
+  orderType: OrderType
+  discount: Discount
+  note: string
   add: (m: MenuItem) => void
   setQty: (i: number, qty: number) => void
   changeQty: (i: number, d: number) => void
   clear: () => void
   hold: () => void
   recall: (i: number) => void
+  setOrderType: (t: OrderType) => void
+  setDiscount: (d: Discount) => void
+  setNote: (n: string) => void
 }
 
 export const useCart = create<CartState>((set) => ({
   lines: [],
   held: [],
+  orderType: 'dine_in',
+  discount: null,
+  note: '',
   add: (m) =>
     set((s) => {
       const idx = s.lines.findIndex((l) => l.product_id === m.id)
@@ -57,7 +69,10 @@ export const useCart = create<CartState>((set) => ({
       lines[i] = { ...lines[i], qty: Math.max(0, lines[i].qty + d) }
       return { lines: lines.filter((l) => l.qty > 0) }
     }),
-  clear: () => set({ lines: [] }),
-  hold: () => set((s) => (s.lines.length ? { held: [...s.held, s.lines], lines: [] } : s)),
+  clear: () => set({ lines: [], discount: null, note: '' }),
+  hold: () => set((s) => (s.lines.length ? { held: [...s.held, s.lines], lines: [], discount: null, note: '' } : s)),
   recall: (i) => set((s) => ({ lines: s.held[i], held: s.held.filter((_, j) => j !== i) })),
+  setOrderType: (t) => set({ orderType: t }),
+  setDiscount: (d) => set({ discount: d }),
+  setNote: (n) => set({ note: n }),
 }))

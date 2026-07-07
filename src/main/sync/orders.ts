@@ -14,6 +14,8 @@ interface OrderRow {
   payment_method: string
   voided: number
   void_reason: string | null
+  order_type: string | null
+  note: string | null
   created_at: string
 }
 interface ItemRow {
@@ -34,7 +36,8 @@ export function buildOfflinePayload(order: OrderRow, items: ItemRow[], outletId:
     outlet_id: Number(outletId),
     counter_id: Number(counterId),
     status: order.voided ? 'cancelled' : 'completed',
-    order_note: order.void_reason ?? '',
+    order_type: order.order_type ?? 'takeaway',
+    order_note: order.note || order.void_reason || '',
     sub_total: order.subtotal,
     tax_total: order.tax,
     discount_total: order.discount,

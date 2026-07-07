@@ -29,7 +29,11 @@ const STATEMENTS: string[] = [
 ]
 
 // Additive migrations for existing DBs (CREATE IF NOT EXISTS won't add new columns).
-const ALTERS: string[] = ['ALTER TABLE products ADD COLUMN image TEXT']
+const ALTERS: string[] = [
+  'ALTER TABLE products ADD COLUMN image TEXT',
+  'ALTER TABLE orders ADD COLUMN order_type TEXT',
+  'ALTER TABLE orders ADD COLUMN note TEXT',
+]
 
 export function migrate(db: Database.Database) {
   const run = db.transaction(() => {

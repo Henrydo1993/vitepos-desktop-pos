@@ -9,15 +9,15 @@ interface Totals {
 }
 
 export function PayModal({ onClose }: { onClose: () => void }) {
-  const { lines, clear } = useCart()
+  const { lines, orderType, discount, note, clear } = useCart()
   const [totals, setTotals] = useState<Totals | null>(null)
   const [tender, setTender] = useState(0)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     const pl = lines.map((l) => ({ price: l.price, qty: l.qty, taxRate: l.taxable ? l.tax_rate / 100 : 0 }))
-    window.pos.price(pl, null).then(setTotals)
-  }, [lines])
+    window.pos.price(pl, discount).then(setTotals)
+  }, [lines, discount])
 
   if (!totals) return null
   const change = Math.max(0, tender - totals.total)
@@ -39,6 +39,8 @@ export function PayModal({ onClose }: { onClose: () => void }) {
         })),
         totals: { ...totals, tender: paidTender, change: paidChange },
         paymentMethod: method,
+        orderType,
+        note,
       })
       alert(`Order #${token} sent to kitchen.${method === 'cash' ? ` Change $${paidChange.toFixed(2)}` : ''}`)
       clear()
@@ -54,7 +56,10 @@ export function PayModal({ onClose }: { onClose: () => void }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
         <h2 className="modal-title">Total ${totals.total.toFixed(2)}</h2>
-        <div style={{ color: 'var(--vt-text-2)', marginBottom: 12 }}>Tax ${totals.tax.toFixed(2)}</div>
+        <div style={{ color: 'var(--vt-text-2)', marginBottom: 12 }}>
+          {orderType.replace('_', '-')} · Subtotal ${totals.subtotal.toFixed(2)}
+          {totals.discount ? ` · Disc −$${totals.discount.toFixed(2)}` : ''} · Tax ${totals.tax.toFixed(2)}
+        </div>
         <input
           className="pay-input"
           type="number"

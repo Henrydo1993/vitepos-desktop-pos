@@ -41,6 +41,12 @@ button { font-family: inherit; }
 
 /* ---- Cart (middle) ---- */
 .cart { display: flex; flex-direction: column; background: #fff; border-right: 1px solid var(--vt-border); min-width: 0; }
+.otype-bar { display: flex; gap: 6px; padding: 10px 14px 0; }
+.otype { flex: 1; height: 38px; border-radius: 9px; border: 1px solid var(--vt-border); background: #fff; color: var(--vt-text); font-weight: 600; font-size: 13px; cursor: pointer; }
+.otype.on { background: var(--vt-main); border-color: var(--vt-main); color: #fff; }
+.note-input { width: 100%; height: 38px; border: none; border-radius: 9px; padding: 0 12px; margin-bottom: 10px; background: rgba(255, 255, 255, 0.18); color: #fff; font-size: 13px; }
+.note-input::placeholder { color: rgba(255, 255, 255, 0.65); }
+.note-input:focus { outline: none; background: rgba(255, 255, 255, 0.26); }
 .cart-top { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--vt-border); }
 .cart-top .num { font-weight: 800; font-size: 18px; color: var(--vt-ink); }
 .cart-top .when { margin-left: auto; text-align: right; font-size: 11px; color: var(--vt-text-2); line-height: 1.35; }

@@ -18,6 +18,8 @@ interface CommitPayload {
   items: (TicketItem & { price: number; product_id: number })[]
   totals: { subtotal: number; discount: number; tax: number; total: number; tender: number; change: number }
   paymentMethod?: string
+  orderType?: string
+  note?: string
 }
 
 function printersOf(db: BetterSqlite3.Database): Record<string, PrinterCfg> {
@@ -30,14 +32,21 @@ function printReceiptAndTickets(
   token: number,
   items: PricedItem[],
   totals: { subtotal: number; discount: number; tax: number; total: number; tender: number; change: number } | null,
+  meta: { orderType?: string; note?: string } = {},
 ) {
   const byStation = printersOf(db)
   if (totals && byStation.counter) {
-    void printWithRetry(byStation.counter, buildReceipt({ token, items, ...totals }), { kickDrawer: true })
+    void printWithRetry(byStation.counter, buildReceipt({ token, items, ...totals, orderType: meta.orderType }), {
+      kickDrawer: true,
+    })
   }
   for (const [station, list] of Object.entries(routeByStation(items))) {
     const cfg = byStation[station]
-    if (cfg) void printWithRetry(cfg, buildKitchenTicket({ token, station: station.toUpperCase(), items: list }))
+    if (cfg)
+      void printWithRetry(
+        cfg,
+        buildKitchenTicket({ token, station: station.toUpperCase(), items: list, orderType: meta.orderType, note: meta.note }),
+      )
   }
 }
 
@@ -62,8 +71,8 @@ export function registerIpc(db: BetterSqlite3.Database, session: Session, env: R
     ).t
     const info = db
       .prepare(
-        `INSERT INTO orders (token,status,subtotal,tax,discount,total,tender,change,payment_method,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO orders (token,status,subtotal,tax,discount,total,tender,change,payment_method,order_type,note,created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         token,
@@ -75,6 +84,8 @@ export function registerIpc(db: BetterSqlite3.Database, session: Session, env: R
         payload.totals.tender,
         payload.totals.change,
         payload.paymentMethod ?? 'cash',
+        payload.orderType ?? 'takeaway',
+        payload.note ?? '',
         new Date().toISOString(),
       )
     const oid = info.lastInsertRowid as number
@@ -84,7 +95,7 @@ export function registerIpc(db: BetterSqlite3.Database, session: Session, env: R
     for (const it of payload.items) {
       insItem.run(oid, it.product_id, it.name, it.qty, it.price, it.station, JSON.stringify(it.modifiers ?? []))
     }
-    printReceiptAndTickets(db, token, payload.items, payload.totals)
+    printReceiptAndTickets(db, token, payload.items, payload.totals, { orderType: payload.orderType, note: payload.note })
     return { token, orderId: oid }
   })
 
