@@ -11,6 +11,7 @@ const pos = {
   voidOrder: (orderId: number, reason: string) => ipcRenderer.invoke('order:void', orderId, reason),
   recentOrders: () => ipcRenderer.invoke('orders:recent'),
   syncNow: () => ipcRenderer.invoke('sync:now'),
+  syncRefresh: () => ipcRenderer.invoke('sync:refresh'),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (patch: Record<string, string>) => ipcRenderer.invoke('settings:save', patch),
   searchCustomers: (q: string) => ipcRenderer.invoke('customer:search', q),

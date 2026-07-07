@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { MenuItem } from '../types'
 import { useCart } from '../state/cart'
+import { useAuth } from '../state/auth'
 import { VariationModal } from './VariationModal'
 
 const isPhoto = (img: string | null) => !!img && !/placeholder/i.test(img)
@@ -18,6 +19,27 @@ export function ProductArea() {
   const [cat, setCat] = useState('All')
   const [q, setQ] = useState('')
   const add = useCart((s) => s.add)
+  const staff = useAuth((s) => s.staff)
+  const [syncing, setSyncing] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const doSync = async () => {
+    if (syncing) return
+    setSyncing(true)
+    try {
+      const r = await window.pos.syncRefresh()
+      setItems(await window.pos.menu())
+      const bits = [`${r.products} products`]
+      if (r.pushed) bits.push(`${r.pushed} sent`)
+      if (r.removed) bits.push(`${r.removed} removed`)
+      setMsg('Synced · ' + bits.join(' · '))
+    } catch {
+      setMsg('Sync failed — check connection')
+    } finally {
+      setSyncing(false)
+      setTimeout(() => setMsg(''), 4000)
+    }
+  }
 
   useEffect(() => {
     let alive = true
@@ -48,6 +70,8 @@ export function ProductArea() {
 
   return (
     <div className="prod">
+      <style>{`@keyframes vspin{to{transform:rotate(360deg)}} .s.spin{animation:vspin .9s linear infinite} .sync-toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:9998;box-shadow:0 6px 20px rgba(0,0,0,.25)}`}</style>
+      {msg && <div className="sync-toast">{msg}</div>}
       <div className="prod-top">
         <div className="search">
           <span>🔍</span>
@@ -57,10 +81,12 @@ export function ProductArea() {
           </div>
         </div>
         <div className="status">
-          <div className="s" title="Sync">⟳</div>
+          <div className={`s${syncing ? ' spin' : ''}`} title="Refresh / sync" onClick={doSync} style={{ cursor: 'pointer' }}>
+            ⟳
+          </div>
           <div className="s" title="Online">📶</div>
           <div className="s" title="Cash drawer">🗄️</div>
-          <div className="s avatar" title="User">H</div>
+          <div className="s avatar" title={staff?.name ?? 'User'}>{(staff?.name ?? 'U').trim().charAt(0).toUpperCase()}</div>
         </div>
       </div>
 

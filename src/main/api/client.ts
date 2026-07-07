@@ -30,6 +30,16 @@ export async function fetchOnlineOrders(s: Session, limit = 20) {
   return (res.data?.data?.rowdata ?? []) as any[]
 }
 
+// POS orders currently live on the store (WooCommerce, _is_vitepos). Used to
+// reconcile local orders against the store (drop ones deleted on the store).
+export async function fetchOrderList(s: Session, limit = 100) {
+  const res = await s.http.post(rr('order/order-list'), { limit, page: 1 })
+  const ok = res.data?.status === true
+  const rows = (res.data?.data?.rowdata ?? []) as any[]
+  const ids = rows.map((r) => Number(r.id ?? r.order_id ?? r.ID ?? r.order_number ?? 0)).filter((n) => n > 0)
+  return { ok, rowCount: rows.length, ids }
+}
+
 // Push a locally-created order to WooCommerce.
 export async function syncOfflineOrder(s: Session, payload: unknown) {
   const res = await s.http.post(rr('order/sync-offline-order'), payload)

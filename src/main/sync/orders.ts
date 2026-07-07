@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import type { Session } from '../api/auth'
-import { syncOfflineOrder } from '../api/client'
+import { syncOfflineOrder, fetchOrderList } from '../api/client'
 
 interface OrderRow {
   id: number
@@ -70,4 +70,30 @@ export async function pushPending(db: Database.Database, s: Session, outletId: s
     }
   }
   return { pending: pending.length, pushed }
+}
+
+// Drop local orders that were deleted on the live store, so the POS matches it.
+// Safe: only touches SYNCED orders (remote_id set), only when the store list call
+// succeeds, and never removes orders older than the id-range the store returned.
+export async function reconcileDeletedOrders(db: Database.Database, s: Session) {
+  const { ok, rowCount, ids } = await fetchOrderList(s, 100)
+  if (!ok) return { removed: 0 } // couldn't confirm — change nothing
+  // Store returned orders but no readable IDs → response shape differs from what we
+  // expect. Abort rather than risk deleting real history.
+  if (rowCount > 0 && ids.length === 0) return { removed: 0 }
+  const serverIds = new Set(ids)
+  const minId = ids.length ? Math.min(...ids) : 0
+  const local = db.prepare('SELECT id, remote_id FROM orders WHERE remote_id IS NOT NULL').all() as { id: number; remote_id: number }[]
+  const del = db.transaction((oid: number) => {
+    db.prepare('DELETE FROM order_items WHERE order_id=?').run(oid)
+    db.prepare('DELETE FROM orders WHERE id=?').run(oid)
+  })
+  let removed = 0
+  for (const o of local) {
+    if (serverIds.has(o.remote_id)) continue // still on the store — keep
+    if (ids.length && o.remote_id < minId) continue // older than the fetched window — can't confirm, keep
+    del(o.id) // within the window (or store empty) and missing → deleted on the store
+    removed++
+  }
+  return { removed }
 }

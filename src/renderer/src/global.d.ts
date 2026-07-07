@@ -27,6 +27,7 @@ declare global {
         }[]
       >
       syncNow: () => Promise<{ pending: number; pushed: number }>
+      syncRefresh: () => Promise<{ products: number; pushed: number; removed: number }>
       getSettings: () => Promise<Record<string, string>>
       saveSettings: (patch: Record<string, string>) => Promise<{ ok: boolean }>
       searchCustomers: (q: string) => Promise<

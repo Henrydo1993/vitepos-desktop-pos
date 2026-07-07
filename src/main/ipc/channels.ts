@@ -5,7 +5,7 @@ import type { Session } from '../api/auth'
 import { listMenu } from '../db/repo'
 import { syncCatalog } from '../sync/catalog'
 import { fetchVariations, searchCustomers, createCustomer } from '../api/client'
-import { pushPending } from '../sync/orders'
+import { pushPending, reconcileDeletedOrders } from '../sync/orders'
 import { pollOnline } from '../sync/online'
 import { getSettings, saveSettings, seedPrintersFromSettings, type Settings } from '../config'
 import { priceOrder, type PriceLine, type Discount } from '../order/pricing'
@@ -72,6 +72,26 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
   ipcMain.handle('sync:now', () => {
     const { outlet, counter } = outletOf(db)
     return pushPending(db, sessionRef.current, outlet, counter)
+  })
+  // Full refresh from the header ⟳: pull catalog, push pending sales, reconcile
+  // orders against the live store (drop ones deleted there), pull website orders.
+  ipcMain.handle('sync:refresh', async () => {
+    const { outlet, counter } = outletOf(db)
+    let products = 0
+    try {
+      products = (await syncCatalog(db, sessionRef.current)).products
+    } catch {
+      /* offline — keep cached catalog */
+    }
+    const push = await pushPending(db, sessionRef.current, outlet, counter).catch(() => ({ pending: 0, pushed: 0 }))
+    const recon = await reconcileDeletedOrders(db, sessionRef.current).catch(() => ({ removed: 0 }))
+    try {
+      const fresh = await pollOnline(db, sessionRef.current)
+      for (const o of fresh) printReceiptAndTickets(db, o.token, o.items, null)
+    } catch {
+      /* offline */
+    }
+    return { products, pushed: push.pushed, removed: recon.removed }
   })
   ipcMain.handle('customer:search', (_e, q: string) => searchCustomers(sessionRef.current, q))
   ipcMain.handle('customer:create', (_e, data: Record<string, unknown>) => createCustomer(sessionRef.current, data))

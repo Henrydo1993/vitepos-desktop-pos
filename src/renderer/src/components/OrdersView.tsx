@@ -20,6 +20,7 @@ export function OrdersView() {
   const [scope, setScope] = useState<'today' | 'all'>('today')
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<Row[]>([])
+  const [syncing, setSyncing] = useState(false)
 
   const load = () => window.pos.ordersList({ scope, q }).then(setRows)
   useEffect(() => {
@@ -46,6 +47,21 @@ export function OrdersView() {
           <button className={scope === 'all' ? 'on' : ''} onClick={() => setScope('all')}>All</button>
         </div>
         <input className="ov-search" placeholder="Search #token / customer / staff…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <button
+          className="ov-refresh"
+          disabled={syncing}
+          onClick={async () => {
+            setSyncing(true)
+            try {
+              await window.pos.syncRefresh()
+            } finally {
+              setSyncing(false)
+              load()
+            }
+          }}
+        >
+          {syncing ? 'Syncing…' : '↻ Sync store'}
+        </button>
       </div>
       <div className="ov-body">
         <div className="ov-table">
@@ -82,6 +98,8 @@ const OV_CSS = `
 .ov-seg button{border:none;background:#fff;padding:8px 16px;font-weight:700;font-size:13px;color:#64748b;cursor:pointer}
 .ov-seg button.on{background:var(--vt-main,#2563eb);color:#fff}
 .ov-search{flex:1;max-width:360px;height:40px;border:1px solid var(--vt-border,#e5e8ee);border-radius:9px;padding:0 14px;font-size:15px}
+.ov-refresh{height:40px;border:1px solid var(--vt-main,#2563eb);background:var(--vt-main,#2563eb);color:#fff;border-radius:9px;padding:0 16px;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap}
+.ov-refresh:disabled{opacity:.6;cursor:default}
 .ov-body{flex:1;overflow:auto;padding:14px 22px}
 .ov-table{background:#fff;border:1px solid #eef1f5;border-radius:12px;overflow:hidden}
 .ov-tr{display:grid;grid-template-columns:64px 132px 90px 1fr 100px 90px 110px 150px;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid #f2f4f7;font-size:14px;color:#0f172a}
