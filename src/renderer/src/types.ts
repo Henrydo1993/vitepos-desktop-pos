@@ -23,5 +23,6 @@ export interface CartLine {
   station: string
   taxable: number
   tax_rate: number
+  image: string | null
   modifiers: string[]
 }

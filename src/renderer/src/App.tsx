@@ -1,25 +1,14 @@
 import { useEffect, useState } from 'react'
-import { MenuGrid } from './components/MenuGrid'
+import { Sidebar } from './components/Sidebar'
 import { CartPanel } from './components/CartPanel'
+import { ProductArea } from './components/ProductArea'
 import { PayModal } from './components/PayModal'
 import { RecentOrdersModal } from './components/RecentOrdersModal'
 
 export default function App() {
-  const [status, setStatus] = useState('Syncing menu…')
-  const [ready, setReady] = useState(false)
   const [paying, setPaying] = useState(false)
   const [showOrders, setShowOrders] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
-
-  useEffect(() => {
-    window.pos
-      .syncCatalog()
-      .then((r) => {
-        setStatus(`${r.products} products`)
-        setReady(true)
-      })
-      .catch((e) => setStatus(`Sync failed: ${(e as Error)?.message ?? e}`))
-  }, [])
 
   useEffect(() => {
     return window.pos.onOnlineOrder((d) => {
@@ -29,20 +18,10 @@ export default function App() {
   }, [])
 
   return (
-    <div className="pos-app">
-      <div className="pos-main">
-        <div className="pos-topbar">
-          <span className="brand">Opal Dessert · Front Counter</span>
-          <span className="meta">
-            <span>{status}</span>
-            <button className="btn btn-sm" onClick={() => setShowOrders(true)}>
-              Orders
-            </button>
-          </span>
-        </div>
-        {ready ? <MenuGrid /> : <div style={{ padding: 24, color: 'var(--vt-text-2)' }}>{status}</div>}
-      </div>
+    <div className="pos-shell">
+      <Sidebar onOrders={() => setShowOrders(true)} />
       <CartPanel onPay={() => setPaying(true)} />
+      <ProductArea />
       {paying && <PayModal onClose={() => setPaying(false)} />}
       {showOrders && <RecentOrdersModal onClose={() => setShowOrders(false)} />}
       {toast && <div className="toast">{toast}</div>}

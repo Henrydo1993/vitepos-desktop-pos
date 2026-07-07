@@ -1,10 +1,8 @@
 import { create } from 'zustand'
 import type { CartLine, MenuItem } from '../types'
 
-// Phase 1 station rule: category/name keyword heuristic. Phase 2 replaces with a
-// per-category station mapping configured in the app.
 const stationOf = (m: MenuItem): string =>
-  /drink|beverage|coffee|tea|juice|soda|bar|smoothie|latte|shake|water/i.test(`${m.category ?? ''} ${m.name}`)
+  /drink|beverage|coffee|tea|juice|soda|bar|smoothie|latte|shake|water|che\b/i.test(`${m.category ?? ''} ${m.name}`)
     ? 'bar'
     : 'kitchen'
 
@@ -12,6 +10,7 @@ interface CartState {
   lines: CartLine[]
   held: CartLine[][]
   add: (m: MenuItem) => void
+  setQty: (i: number, qty: number) => void
   changeQty: (i: number, d: number) => void
   clear: () => void
   hold: () => void
@@ -40,10 +39,17 @@ export const useCart = create<CartState>((set) => ({
             station: stationOf(m),
             taxable: m.taxable,
             tax_rate: m.tax_rate,
+            image: m.image,
             modifiers: [],
           },
         ],
       }
+    }),
+  setQty: (i, qty) =>
+    set((s) => {
+      const lines = [...s.lines]
+      lines[i] = { ...lines[i], qty: Math.max(1, Math.floor(qty || 1)) }
+      return { lines }
     }),
   changeQty: (i, d) =>
     set((s) => {
