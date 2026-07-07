@@ -10,6 +10,7 @@
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "dist": "electron-vite build && electron-builder --win",
+    "release": "electron-vite build && electron-builder --win --publish always",
     "test": "vitest run",
     "test:watch": "vitest",
     "probe": "tsx scripts/probe-api.ts",
@@ -48,6 +49,7 @@
     "files": ["out/**/*", "package.json"],
     "asarUnpack": ["**/node_modules/better-sqlite3/**", "**/node_modules/node-thermal-printer/**"],
     "win": { "target": "nsis" },
-    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true }
+    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true },
+    "publish": [{ "provider": "github", "owner": "REPLACE_GITHUB_OWNER", "repo": "vitepos-desktop-pos" }]
   }
 }
