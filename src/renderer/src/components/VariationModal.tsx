@@ -16,6 +16,7 @@ export function VariationModal({ product, onClose }: { product: MenuItem; onClos
       name: v.name,
       price: Number(v.price),
       category: product.category,
+      image: product.image,
       taxable: product.taxable,
       tax_rate: product.tax_rate,
       type: 'simple',

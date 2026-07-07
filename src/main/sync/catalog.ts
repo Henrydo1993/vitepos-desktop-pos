@@ -19,6 +19,7 @@ export function normalizeProduct(raw: any) {
     sku: raw.sku ? String(raw.sku) : null,
     price: Number(raw.price ?? raw.regular_price ?? 0) || 0,
     category: Array.isArray(raw.categories) && raw.categories.length ? decodeEntities(raw.categories[0]) : null,
+    image: raw.image ? String(raw.image) : null,
     taxable: raw.taxable === 'Y' || raw.taxable === true ? 1 : 0,
     tax_rate: Number(raw.tax_rate ?? 0) || 0,
     type: raw.type ?? 'simple',

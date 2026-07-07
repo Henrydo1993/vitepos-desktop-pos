@@ -5,7 +5,7 @@ const STATEMENTS: string[] = [
       id INTEGER PRIMARY KEY, name TEXT NOT NULL, parent_id INTEGER, station TEXT )`,
   `CREATE TABLE IF NOT EXISTS products (
       id INTEGER PRIMARY KEY, name TEXT NOT NULL, sku TEXT, price REAL NOT NULL,
-      category TEXT, taxable INTEGER DEFAULT 0, tax_rate REAL DEFAULT 0,
+      category TEXT, image TEXT, taxable INTEGER DEFAULT 0, tax_rate REAL DEFAULT 0,
       type TEXT DEFAULT 'simple', hidden INTEGER DEFAULT 0 )`,
   `CREATE TABLE IF NOT EXISTS modifiers (
       id INTEGER PRIMARY KEY, product_id INTEGER, name TEXT, price REAL DEFAULT 0 )`,
@@ -28,9 +28,19 @@ const STATEMENTS: string[] = [
   `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)`,
 ]
 
+// Additive migrations for existing DBs (CREATE IF NOT EXISTS won't add new columns).
+const ALTERS: string[] = ['ALTER TABLE products ADD COLUMN image TEXT']
+
 export function migrate(db: Database.Database) {
   const run = db.transaction(() => {
     for (const sql of STATEMENTS) db.prepare(sql).run()
   })
   run()
+  for (const sql of ALTERS) {
+    try {
+      db.prepare(sql).run()
+    } catch {
+      /* column already exists */
+    }
+  }
 }
