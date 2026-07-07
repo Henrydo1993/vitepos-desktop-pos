@@ -2,26 +2,19 @@
 
 ## 1. Build the Windows installer
 
-The app packages to an NSIS installer (`Opal Dessert POS Setup <version>.exe`) via electron-builder
-(config is in `package.json` → `build`).
-
-> **Build on Windows, not this Mac.** `better-sqlite3` is a native module and does **not**
-> cross-compile Mac → Windows. On Windows it builds automatically.
-
-### Manual build (quickest for a single terminal)
-
-On a Windows PC with Node 20:
-
 ```bash
-# copy the project folder over (or git clone)
-cd vitepos-desktop-pos
-npm install
-npx electron-rebuild -f -w better-sqlite3
-npm run dist          # -> dist/Opal Dessert POS Setup <ver>.exe
+npm run dist   # -> dist/Opal Dessert POS Setup <ver>.exe   (~86 MB, Windows x64, NSIS)
 ```
 
-Copy that `.exe` to the POS terminal and run it — it installs, adds a Start-menu / desktop
-shortcut, and launches. Set `POS_KIOSK=1` in the environment for fullscreen kiosk lockdown.
+**This builds on macOS** — electron-builder downloads the Windows Electron and the correct
+Windows `better-sqlite3` prebuilt automatically. No Windows machine or cross-compile setup needed.
+(It also builds on Windows/Linux the same way.)
+
+Send that single `.exe` to the business owner. They **double-click it** → it installs (Start-menu
++ desktop shortcut) → launches. On first run the app shows a **setup screen** (paste the Application
+Password + enter printer IPs) — no command line, no `.env`, nothing technical.
+
+For a locked-down till, set the `POS_KIOSK=1` environment variable (fullscreen, no window chrome).
 
 ## 2. Configuration on the terminal  ⚠️ prerequisite (not built yet)
 
@@ -88,7 +81,7 @@ jobs:
 
 | Step | Where | Status |
 |---|---|---|
-| Windows installer (`npm run dist`) | on Windows | ✅ configured |
-| First-run Settings screen (config on machine) | app | ⚠️ **needs building** |
+| Windows installer (`npm run dist`) | macOS or Windows | ✅ builds an x64 `.exe` |
+| First-run Settings screen (config on machine) | app | ✅ built |
 | Auto-update client (`electron-updater`) | app | ✅ wired |
 | Publish feed + CI (tag → build → publish) | GitHub Actions | ✅ configured (needs repo pushed to GitHub) |
