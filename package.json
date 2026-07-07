@@ -1,6 +1,6 @@
 {
   "name": "vitepos-desktop-pos",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "Windows desktop POS client for Vitepos/WooCommerce (Phase 1)",
@@ -50,6 +50,6 @@
     "asarUnpack": ["**/node_modules/better-sqlite3/**", "**/node_modules/node-thermal-printer/**"],
     "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
     "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true },
-    "publish": [{ "provider": "github", "owner": "Henrydo1993", "repo": "vitepos-desktop-pos" }]
+    "publish": [{ "provider": "github", "owner": "Henrydo1993", "repo": "vitepos-desktop-pos", "releaseType": "release" }]
   }
 }
