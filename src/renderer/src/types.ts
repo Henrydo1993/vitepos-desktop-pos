@@ -4,6 +4,7 @@ export interface MenuItem {
   price: number
   category: string | null
   image: string | null
+  variations: string | null
   taxable: number
   tax_rate: number
   type: string

@@ -18,6 +18,7 @@ export interface ProductRow {
   price: number
   category?: string | null
   image?: string | null
+  variations?: string | null
   taxable?: number
   tax_rate?: number
   type?: string
@@ -27,12 +28,12 @@ export interface ProductRow {
 export const upsertProduct = (db: Database.Database, p: ProductRow) =>
   db
     .prepare(
-      `INSERT INTO products (id,name,sku,price,category,image,taxable,tax_rate,type,hidden)
-       VALUES (@id,@name,@sku,@price,@category,@image,@taxable,@tax_rate,@type,@hidden)
+      `INSERT INTO products (id,name,sku,price,category,image,variations,taxable,tax_rate,type,hidden)
+       VALUES (@id,@name,@sku,@price,@category,@image,@variations,@taxable,@tax_rate,@type,@hidden)
        ON CONFLICT(id) DO UPDATE SET name=@name, sku=@sku, price=@price, category=@category,
-         image=@image, taxable=@taxable, tax_rate=@tax_rate, type=@type, hidden=@hidden`,
+         image=@image, variations=@variations, taxable=@taxable, tax_rate=@tax_rate, type=@type, hidden=@hidden`,
     )
-    .run({ sku: null, category: null, image: null, taxable: 0, tax_rate: 0, type: 'simple', hidden: 0, ...p })
+    .run({ sku: null, category: null, image: null, variations: null, taxable: 0, tax_rate: 0, type: 'simple', hidden: 0, ...p })
 
 export const listMenu = (db: Database.Database) =>
   db.prepare(`SELECT * FROM products WHERE hidden=0 ORDER BY name`).all()

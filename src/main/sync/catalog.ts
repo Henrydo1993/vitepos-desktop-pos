@@ -20,6 +20,15 @@ export function normalizeProduct(raw: any) {
     price: Number(raw.price ?? raw.regular_price ?? 0) || 0,
     category: Array.isArray(raw.categories) && raw.categories.length ? decodeEntities(raw.categories[0]) : null,
     image: raw.image ? String(raw.image) : null,
+    variations: JSON.stringify(
+      Array.isArray(raw.variations)
+        ? raw.variations.map((v: any) => ({
+            id: Number(v.id),
+            name: decodeEntities(v.name ?? v.title),
+            price: Number(v.price ?? v.regular_price ?? 0) || 0,
+          }))
+        : [],
+    ),
     taxable: raw.taxable === 'Y' || raw.taxable === true ? 1 : 0,
     tax_rate: Number(raw.tax_rate ?? 0) || 0,
     type: raw.type ?? 'simple',
