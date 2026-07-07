@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useCart } from '../state/cart'
+import { useAuth } from '../state/auth'
 import { Numpad } from './Numpad'
 
 interface Totals {
@@ -20,6 +21,7 @@ const METHODS: { k: Method; label: string; icon: string }[] = [
 // stays visible on the left, exactly like the real Vitepos POS.
 export function Checkout({ onClose }: { onClose: () => void }) {
   const { lines, orderType, discount, note, setNote, customer, fee, clear } = useCart()
+  const staff = useAuth((s) => s.staff)
   const [totals, setTotals] = useState<Totals | null>(null)
   const [method, setMethod] = useState<Method>('cash')
   const [amtStr, setAmtStr] = useState('')
@@ -54,6 +56,7 @@ export function Checkout({ onClose }: { onClose: () => void }) {
         note,
         customerId: customer?.id,
         customerName: customer?.name,
+        staffName: staff?.name,
       })
       clear()
       onClose()

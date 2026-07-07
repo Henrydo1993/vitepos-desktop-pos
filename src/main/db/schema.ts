@@ -25,6 +25,9 @@ const STATEMENTS: string[] = [
       product_id INTEGER, name TEXT, qty INTEGER, price REAL, station TEXT,
       modifiers TEXT, FOREIGN KEY(order_id) REFERENCES orders(id) )`,
   `CREATE TABLE IF NOT EXISTS seen_online (remote_id INTEGER PRIMARY KEY, seen_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS staff (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, pin_hash TEXT NOT NULL,
+      role TEXT DEFAULT 'staff', active INTEGER DEFAULT 1, created_at TEXT )`,
   `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)`,
 ]
 
@@ -36,6 +39,7 @@ const ALTERS: string[] = [
   'ALTER TABLE orders ADD COLUMN note TEXT',
   'ALTER TABLE orders ADD COLUMN customer_id INTEGER',
   'ALTER TABLE orders ADD COLUMN customer_name TEXT',
+  'ALTER TABLE orders ADD COLUMN staff_name TEXT',
 ]
 
 export function migrate(db: Database.Database) {

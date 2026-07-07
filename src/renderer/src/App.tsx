@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react'
-import { Sidebar } from './components/Sidebar'
+import { Sidebar, type View } from './components/Sidebar'
 import { CartPanel } from './components/CartPanel'
 import { ProductArea } from './components/ProductArea'
 import { Checkout } from './components/Checkout'
 import { LockScreen } from './components/LockScreen'
-import { RecentOrdersModal } from './components/RecentOrdersModal'
+import { DashboardView } from './components/DashboardView'
+import { OrdersView } from './components/OrdersView'
 import { SettingsModal } from './components/SettingsModal'
 import { VirtualKeyboard } from './components/VirtualKeyboard'
+import { useAuth } from './state/auth'
 
 export default function App() {
   const [paying, setPaying] = useState(false)
-  const [showOrders, setShowOrders] = useState(false)
+  const [view, setView] = useState<View>('pos')
   const [showSettings, setShowSettings] = useState(false)
   const [firstRun, setFirstRun] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [version, setVersion] = useState('')
   const [locked, setLocked] = useState(true)
+  const { staff, setStaff } = useAuth()
 
   useEffect(() => {
     window.pos.getSettings().then((s) => {
@@ -66,10 +69,28 @@ export default function App() {
 
   return (
     <div className="pos-shell">
-      <Sidebar version={version} onOrders={() => setShowOrders(true)} onSettings={() => setShowSettings(true)} />
-      <CartPanel onPay={() => setPaying(true)} />
-      {paying ? <Checkout onClose={() => setPaying(false)} /> : <ProductArea />}
-      {showOrders && <RecentOrdersModal onClose={() => setShowOrders(false)} />}
+      <Sidebar
+        view={view}
+        onNav={setView}
+        onSettings={() => setShowSettings(true)}
+        onLogout={() => {
+          setStaff(null)
+          setView('pos')
+          setLocked(true)
+        }}
+        staff={staff}
+        version={version}
+      />
+      {view === 'pos' ? (
+        <>
+          <CartPanel onPay={() => setPaying(true)} />
+          {paying ? <Checkout onClose={() => setPaying(false)} /> : <ProductArea />}
+        </>
+      ) : (
+        <div style={{ gridColumn: '2 / -1', minHeight: 0, overflow: 'hidden' }}>
+          {view === 'dashboard' ? <DashboardView /> : <OrdersView />}
+        </div>
+      )}
       {showSettings && (
         <SettingsModal
           firstRun={firstRun}

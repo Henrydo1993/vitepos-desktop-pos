@@ -39,6 +39,32 @@ declare global {
       pinStatus: () => Promise<{ set: boolean }>
       pinSet: (pin: string) => Promise<{ ok: boolean }>
       pinVerify: (pin: string) => Promise<{ ok: boolean }>
+      staffList: () => Promise<{ id: number; name: string; role: string }[]>
+      staffAdd: (name: string, pin: string, role: string) => Promise<{ ok: boolean; id: number }>
+      staffVerify: (id: number, pin: string) => Promise<{ ok: boolean; staff?: { id: number; name: string; role: string } }>
+      staffRemove: (id: number) => Promise<{ ok: boolean }>
+      dashToday: () => Promise<{
+        orders: number
+        gross: number
+        byMethod: { method: string; n: number; amt: number }[]
+        top: { name: string; qty: number; amt: number }[]
+        byStaff: { staff: string; n: number; amt: number }[]
+      }>
+      ordersList: (opts: { scope?: 'today' | 'all'; q?: string }) => Promise<
+        {
+          id: number
+          token: number
+          total: number
+          payment_method: string
+          order_type: string
+          customer_name: string | null
+          staff_name: string | null
+          voided: number
+          synced: number
+          sync_error: string | null
+          created_at: string
+        }[]
+      >
       onOnlineOrder: (cb: (data: { token: number; total: number; items: number }) => void) => () => void
     }
   }

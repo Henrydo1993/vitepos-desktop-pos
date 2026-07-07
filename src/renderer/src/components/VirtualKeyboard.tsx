@@ -136,7 +136,7 @@ export function VirtualKeyboard() {
 }
 
 const VK_CSS = `
-.vk{position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#e8eaed;border-top:1px solid #c4c8cf;
+.vk{position:fixed;left:0;right:0;bottom:0;z-index:10001;background:#e8eaed;border-top:1px solid #c4c8cf;
  padding:8px 8px calc(8px + env(safe-area-inset-bottom,0));display:flex;flex-direction:column;gap:6px;
  box-shadow:0 -6px 24px rgba(0,0,0,.18);user-select:none;touch-action:manipulation}
 .vk-readout{display:flex;align-items:center;background:#fff;border:1px solid #c4c8cf;border-radius:9px;

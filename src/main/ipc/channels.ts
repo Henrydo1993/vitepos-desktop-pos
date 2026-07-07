@@ -25,6 +25,7 @@ interface CommitPayload {
   note?: string
   customerId?: number
   customerName?: string
+  staffName?: string
 }
 
 const outletOf = (db: BetterSqlite3.Database) => {
@@ -107,6 +108,70 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     return { ok: !!h && h === sha(String(pin)) }
   })
 
+  // --- Staff / multi-user sign-in (PINs sha-256; a legacy single PIN becomes "Manager") ---
+  const nowIso = () => new Date().toISOString()
+  {
+    const legacy = pinHash()
+    const count = (db.prepare('SELECT COUNT(*) c FROM staff').get() as { c: number }).c
+    if (legacy && count === 0)
+      db.prepare("INSERT INTO staff (name,pin_hash,role,active,created_at) VALUES ('Manager',?,'manager',1,?)").run(legacy, nowIso())
+  }
+  ipcMain.handle('staff:list', () => db.prepare('SELECT id,name,role FROM staff WHERE active=1 ORDER BY id').all())
+  ipcMain.handle('staff:add', (_e, name: string, pin: string, role: string) => {
+    const info = db
+      .prepare('INSERT INTO staff (name,pin_hash,role,active,created_at) VALUES (?,?,?,1,?)')
+      .run(String(name).trim() || 'Staff', sha(String(pin)), role || 'staff', nowIso())
+    return { ok: true, id: Number(info.lastInsertRowid) }
+  })
+  ipcMain.handle('staff:verify', (_e, staffId: number, pin: string) => {
+    const row = db.prepare('SELECT id,name,role,pin_hash FROM staff WHERE id=? AND active=1').get(staffId) as
+      | { id: number; name: string; role: string; pin_hash: string }
+      | undefined
+    if (row && row.pin_hash === sha(String(pin))) return { ok: true, staff: { id: row.id, name: row.name, role: row.role } }
+    return { ok: false }
+  })
+  ipcMain.handle('staff:remove', (_e, staffId: number) => {
+    db.prepare('UPDATE staff SET active=0 WHERE id=?').run(staffId)
+    return { ok: true }
+  })
+
+  // --- Dashboard (today, local time) ---
+  ipcMain.handle('dash:today', () => {
+    const today = "date(created_at)=date('now','localtime')"
+    const sum = db.prepare(`SELECT COUNT(*) orders, COALESCE(SUM(total),0) gross FROM orders WHERE voided=0 AND ${today}`).get()
+    const byMethod = db
+      .prepare(`SELECT payment_method method, COUNT(*) n, COALESCE(SUM(total),0) amt FROM orders WHERE voided=0 AND ${today} GROUP BY payment_method ORDER BY amt DESC`)
+      .all()
+    const top = db
+      .prepare(
+        `SELECT oi.name, SUM(oi.qty) qty, SUM(oi.qty*oi.price) amt FROM order_items oi JOIN orders o ON o.id=oi.order_id
+         WHERE o.voided=0 AND date(o.created_at)=date('now','localtime') GROUP BY oi.name ORDER BY qty DESC LIMIT 8`,
+      )
+      .all()
+    const byStaff = db
+      .prepare(`SELECT COALESCE(NULLIF(staff_name,''),'—') staff, COUNT(*) n, COALESCE(SUM(total),0) amt FROM orders WHERE voided=0 AND ${today} GROUP BY staff ORDER BY amt DESC`)
+      .all()
+    return { ...(sum as object), byMethod, top, byStaff }
+  })
+
+  // --- Orders list (today or all, optional search) ---
+  ipcMain.handle('orders:list', (_e, opts: { scope?: 'today' | 'all'; q?: string }) => {
+    const clauses: string[] = []
+    const params: Record<string, string> = {}
+    if ((opts?.scope ?? 'today') !== 'all') clauses.push("date(created_at)=date('now','localtime')")
+    const q = (opts?.q ?? '').trim()
+    if (q) {
+      clauses.push('(CAST(token AS TEXT) LIKE @q OR customer_name LIKE @q OR payment_method LIKE @q OR staff_name LIKE @q)')
+      params.q = `%${q}%`
+    }
+    const where = clauses.length ? 'WHERE ' + clauses.join(' AND ') : ''
+    return db
+      .prepare(
+        `SELECT id,token,total,payment_method,order_type,customer_name,staff_name,voided,synced,sync_error,created_at FROM orders ${where} ORDER BY id DESC LIMIT 200`,
+      )
+      .all(params)
+  })
+
   // --- Settings ---
   ipcMain.handle('settings:get', () => getSettings(db))
   ipcMain.handle('settings:save', (_e, patch: Settings) => {
@@ -122,8 +187,8 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     ).t
     const info = db
       .prepare(
-        `INSERT INTO orders (token,status,subtotal,tax,discount,total,tender,change,payment_method,order_type,note,customer_id,customer_name,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO orders (token,status,subtotal,tax,discount,total,tender,change,payment_method,order_type,note,customer_id,customer_name,staff_name,created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         token,
@@ -139,6 +204,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
         payload.note ?? '',
         payload.customerId ?? null,
         payload.customerName ?? null,
+        payload.staffName ?? null,
         new Date().toISOString(),
       )
     const oid = info.lastInsertRowid as number
