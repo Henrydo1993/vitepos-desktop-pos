@@ -34,6 +34,8 @@ declare global {
       >
       createCustomer: (data: Record<string, unknown>) => Promise<{ ok: boolean; data: any }>
       testPrint: (cfg: { station: string; type: string; address: string }) => Promise<{ ok: boolean }>
+      appInfo: () => Promise<{ version: string; lastSeen: string }>
+      markSeen: () => Promise<{ ok: boolean }>
       onOnlineOrder: (cb: (data: { token: number; total: number; items: number }) => void) => () => void
     }
   }

@@ -5,6 +5,7 @@ import { ProductArea } from './components/ProductArea'
 import { PayModal } from './components/PayModal'
 import { RecentOrdersModal } from './components/RecentOrdersModal'
 import { SettingsModal } from './components/SettingsModal'
+import { VirtualKeyboard } from './components/VirtualKeyboard'
 
 export default function App() {
   const [paying, setPaying] = useState(false)
@@ -12,6 +13,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [firstRun, setFirstRun] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [version, setVersion] = useState('')
 
   useEffect(() => {
     window.pos.getSettings().then((s) => {
@@ -19,6 +21,19 @@ export default function App() {
         setFirstRun(true)
         setShowSettings(true)
       }
+    })
+  }, [])
+
+  useEffect(() => {
+    // Show the running version, and if it changed since last launch, prove the
+    // update installed itself.
+    window.pos.appInfo().then(({ version, lastSeen }) => {
+      setVersion(version)
+      if (lastSeen && lastSeen !== version) {
+        setToast(`Updated to v${version} automatically ✓`)
+        setTimeout(() => setToast(null), 8000)
+      }
+      void window.pos.markSeen()
     })
   }, [])
 
@@ -31,7 +46,7 @@ export default function App() {
 
   return (
     <div className="pos-shell">
-      <Sidebar onOrders={() => setShowOrders(true)} onSettings={() => setShowSettings(true)} />
+      <Sidebar version={version} onOrders={() => setShowOrders(true)} onSettings={() => setShowSettings(true)} />
       <CartPanel onPay={() => setPaying(true)} />
       <ProductArea />
       {paying && <PayModal onClose={() => setPaying(false)} />}
@@ -46,6 +61,7 @@ export default function App() {
         />
       )}
       {toast && <div className="toast">{toast}</div>}
+      <VirtualKeyboard />
     </div>
   )
 }

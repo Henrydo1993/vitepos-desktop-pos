@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, app } from 'electron'
 import type BetterSqlite3 from 'better-sqlite3'
 import type { Session } from '../api/auth'
 import { listMenu } from '../db/repo'
@@ -78,6 +78,18 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
   )
   ipcMain.handle('print:test', async (_e, cfg: PrinterCfg) => {
     await printWithRetry(cfg, `*** TEST PRINT ***\n${cfg.station.toUpperCase()}\n${new Date().toLocaleString()}`)
+    return { ok: true }
+  })
+
+  // --- App version / auto-update marker (renderer shows this + proves a self-update) ---
+  ipcMain.handle('app:info', () => {
+    const row = db.prepare("SELECT value FROM meta WHERE key='last_seen_version'").get() as { value?: string } | undefined
+    return { version: app.getVersion(), lastSeen: row?.value ?? '' }
+  })
+  ipcMain.handle('app:markSeen', () => {
+    db.prepare("INSERT INTO meta (key,value) VALUES ('last_seen_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(
+      app.getVersion(),
+    )
     return { ok: true }
   })
 

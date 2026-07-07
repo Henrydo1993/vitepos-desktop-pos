@@ -9,7 +9,7 @@ const ITEMS = [
   { key: 'customers', label: 'Customers', ico: '👥' },
 ]
 
-export function Sidebar({ onOrders, onSettings }: { onOrders: () => void; onSettings: () => void }) {
+export function Sidebar({ onOrders, onSettings, version }: { onOrders: () => void; onSettings: () => void; version?: string }) {
   return (
     <div className="nav">
       <div className="logo">OPAL</div>
@@ -27,6 +27,7 @@ export function Sidebar({ onOrders, onSettings }: { onOrders: () => void; onSett
         <span className="ico">⚙️</span>
         <span>Settings</span>
       </button>
+      {version && <div style={{ textAlign: 'center', fontSize: 11, opacity: 0.6, padding: '8px 0 2px' }}>v{version}</div>}
     </div>
   )
 }

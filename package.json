@@ -1,9 +1,10 @@
 {
   "name": "vitepos-desktop-pos",
-  "version": "0.1.2",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Windows desktop POS client for Vitepos/WooCommerce (Phase 1)",
+  "description": "Windows desktop POS client for Vitepos/WooCommerce",
+  "author": "Opal Dessert",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -44,12 +45,12 @@
     "vitest": "^2.1.8"
   },
   "build": {
-    "appId": "au.com.opaldessert.pos",
-    "productName": "Opal Dessert POS",
+    "appId": "au.com.opaldessert.opalpos",
+    "productName": "Opal POS",
     "files": ["out/**/*", "package.json"],
     "asarUnpack": ["**/node_modules/better-sqlite3/**", "**/node_modules/node-thermal-printer/**"],
-    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
-    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true },
+    "win": { "icon": "build/icon.ico", "target": [{ "target": "nsis", "arch": ["x64"] }] },
+    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "installerIcon": "build/icon.ico", "uninstallerIcon": "build/icon.ico", "installerHeaderIcon": "build/icon.ico" },
     "publish": [{ "provider": "github", "owner": "Henrydo1993", "repo": "vitepos-desktop-pos", "releaseType": "release" }]
   }
 }

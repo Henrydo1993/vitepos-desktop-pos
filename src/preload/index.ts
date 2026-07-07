@@ -16,6 +16,8 @@ const pos = {
   searchCustomers: (q: string) => ipcRenderer.invoke('customer:search', q),
   createCustomer: (data: unknown) => ipcRenderer.invoke('customer:create', data),
   testPrint: (cfg: unknown) => ipcRenderer.invoke('print:test', cfg),
+  appInfo: () => ipcRenderer.invoke('app:info'),
+  markSeen: () => ipcRenderer.invoke('app:markSeen'),
   onOnlineOrder: (cb: (data: { token: number; total: number; items: number }) => void) => {
     const listener = (_e: IpcRendererEvent, data: { token: number; total: number; items: number }) => cb(data)
     ipcRenderer.on('online:new', listener)
