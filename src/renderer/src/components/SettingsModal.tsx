@@ -15,6 +15,7 @@ export function SettingsModal({ onClose, firstRun }: { onClose: () => void; firs
   const [s, setS] = useState<Record<string, string> | null>(null)
   const [busy, setBusy] = useState(false)
   const [adv, setAdv] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     window.pos.getSettings().then((v) =>
@@ -28,6 +29,7 @@ export function SettingsModal({ onClose, firstRun }: { onClose: () => void; firs
 
   const save = async () => {
     setBusy(true)
+    setError('')
     try {
       await window.pos.saveSettings({
         ...s,
@@ -35,9 +37,18 @@ export function SettingsModal({ onClose, firstRun }: { onClose: () => void; firs
         printer_kitchen: toAddr(s.printer_kitchen),
         printer_bar: toAddr(s.printer_bar),
       })
-      await window.pos.syncCatalog().catch(() => {})
-      onClose()
-    } finally {
+      const r = await window.pos.syncCatalog()
+      if (r && r.products > 0) {
+        // Reload so the product panel re-reads the freshly synced menu.
+        window.location.reload()
+        return
+      }
+      setError(
+        'Connected, but no products loaded. Check the Application Password is correct, the store URL is right, and that products are set to show in POS.',
+      )
+      setBusy(false)
+    } catch (e) {
+      setError(`Couldn't reach the store: ${(e as Error)?.message ?? e}. Check the store website + Application Password.`)
       setBusy(false)
     }
   }
@@ -85,6 +96,9 @@ export function SettingsModal({ onClose, firstRun }: { onClose: () => void; firs
           </div>
         )}
 
+        {error && (
+          <div style={{ color: 'var(--vt-del)', fontSize: 13, marginBottom: 10, lineHeight: 1.4 }}>{error}</div>
+        )}
         <div className="btn-row">
           {canClose && (
             <button className="btn" onClick={onClose} disabled={busy}>

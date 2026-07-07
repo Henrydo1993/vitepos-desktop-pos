@@ -1,6 +1,6 @@
 {
   "name": "vitepos-desktop-pos",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Windows desktop POS client for Vitepos/WooCommerce (Phase 1)",
