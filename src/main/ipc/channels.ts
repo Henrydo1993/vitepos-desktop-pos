@@ -93,6 +93,7 @@ function printReceiptAndTickets(
   meta: { orderType?: string; note?: string; customerName?: string; staffName?: string } = {},
 ) {
   const byStation = printersOf(db)
+  const receiptPrinted = !!(totals && byStation.counter)
   if (totals && byStation.counter) {
     void printReceiptWithRetry(
       byStation.counter,
@@ -101,13 +102,16 @@ function printReceiptAndTickets(
       { kickDrawer: true },
     )
   }
+  const counterFallback: TicketItem[] = []
   for (const [station, list] of Object.entries(routeByStation(items))) {
     const cfg = byStation[station]
-    if (cfg)
-      void printWithRetry(
-        cfg,
-        buildKitchenTicket({ token, station: station.toUpperCase(), items: list, orderType: meta.orderType, note: meta.note }),
-      )
+    if (cfg) void printWithRetry(cfg, buildKitchenTicket({ token, station: station.toUpperCase(), items: list, orderType: meta.orderType, note: meta.note }))
+    else counterFallback.push(...list)
+  }
+  // No dedicated kitchen/bar printer → print one prepare list on the counter, unless a
+  // pay-first receipt already went there (it already lists the items).
+  if (counterFallback.length && byStation.counter && !receiptPrinted) {
+    void printWithRetry(byStation.counter, buildKitchenTicket({ token, station: 'PREPARE', items: counterFallback, orderType: meta.orderType, note: meta.note }))
   }
 }
 
@@ -294,6 +298,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     const id = saveOpenOrder(db, { ...p, lines: lines.map((l) => ({ ...l, sent: true })) })
     if (unsent.length) {
       const byStation = printersOf(db)
+      const counterFallback: TicketItem[] = []
       for (const [station, list] of Object.entries(routeByStation(unsent))) {
         const cfg = byStation[station]
         if (cfg)
@@ -301,6 +306,14 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
             cfg,
             buildKitchenTicket({ token: id, station: `${station.toUpperCase()} · ${p.tableLabel ?? ''}`.trim(), items: list, orderType: 'table', note: p.note ?? undefined }),
           )
+        else counterFallback.push(...list)
+      }
+      // Single-printer shop (counter only): print the prepare list on the counter.
+      if (counterFallback.length && byStation.counter) {
+        void printWithRetry(
+          byStation.counter,
+          buildKitchenTicket({ token: id, station: `PREPARE · ${p.tableLabel ?? ''}`.trim(), items: counterFallback, orderType: 'table', note: p.note ?? undefined }),
+        )
       }
     }
     return { id, printed: unsent.length }
