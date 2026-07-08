@@ -93,7 +93,8 @@ export const useCart = create<CartState>((set) => ({
   clear: () => set({ ...RESET }),
   hold: () => set((s) => (s.lines.length ? { held: [...s.held, s.lines], ...RESET } : s)),
   recall: (i) => set((s) => ({ lines: s.held[i], held: s.held.filter((_, j) => j !== i) })),
-  setOrderType: (t) => set({ orderType: t }),
+  // Switching to a non-table type releases the table (walk-in/takeaway/delivery aren't table-bound).
+  setOrderType: (t) => set(t === 'table' ? { orderType: t } : { orderType: t, tableLabel: null, openOrderId: null }),
   setDiscount: (d) => set({ discount: d }),
   setNote: (n) => set({ note: n }),
   setCustomer: (c) => set({ customer: c }),
