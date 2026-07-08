@@ -1,6 +1,6 @@
 import { ThermalPrinter, PrinterTypes } from 'node-thermal-printer'
 import { EventEmitter } from 'node:events'
-import type { ReceiptConfig, ReceiptData } from './tickets'
+import type { ReceiptConfig, ReceiptData, DayReport } from './tickets'
 
 // address: 'tcp://192.168.1.50' (network) or a USB device path
 export interface PrinterCfg {
@@ -121,6 +121,64 @@ export async function printReceiptWithRetry(
   for (let i = 0; i < tries; i++) {
     try {
       await receiptOnce(cfg, o, r, opts)
+      printEvents.emit('ok', { station: cfg.station })
+      return
+    } catch (e) {
+      lastErr = e
+      await new Promise((res) => setTimeout(res, 400 * (i + 1)))
+    }
+  }
+  printEvents.emit('fail', { station: cfg.station, error: String(lastErr) })
+  throw lastErr
+}
+
+// End-of-day sales summary (Z-report) with proper formatting.
+async function reportOnce(cfg: PrinterCfg, r: DayReport, opts: { kickDrawer?: boolean }) {
+  const p = make(cfg)
+  if (!(await p.isPrinterConnected())) throw new Error(`printer ${cfg.station} offline (${cfg.address})`)
+  const money = (n: number) => `$${n.toFixed(2)}`
+  p.alignCenter()
+  p.bold(true)
+  p.setTextSize(1, 1)
+  p.println('END OF DAY')
+  p.setTextNormal()
+  if (r.shopName) p.println(r.shopName)
+  p.bold(false)
+  p.println(r.date)
+  p.alignLeft()
+  p.drawLine()
+  if (r.openedAt) p.println(`Opened: ${r.openedAt}${r.openedBy ? ' · ' + r.openedBy : ''}`)
+  if (r.closedAt) p.println(`Closed: ${r.closedAt}${r.closedBy ? ' · ' + r.closedBy : ''}`)
+  p.drawLine()
+  p.leftRight('Orders', String(r.orders))
+  p.bold(true)
+  p.leftRight('Gross sales', money(r.gross))
+  p.bold(false)
+  p.drawLine()
+  p.println('By payment method')
+  for (const m of r.byMethod) p.leftRight(`  ${m.method} (${m.n})`, money(m.amt))
+  p.drawLine()
+  p.leftRight('Opening float', money(r.openingFloat))
+  p.leftRight('Cash sales', money(r.cashSales))
+  p.bold(true)
+  p.leftRight('Cash expected', money(r.cashExpected))
+  p.bold(false)
+  if (r.countedCash != null) {
+    p.leftRight('Counted', money(r.countedCash))
+    p.leftRight('Over / Short', money(r.countedCash - r.cashExpected))
+  }
+  p.drawLine()
+  p.newLine()
+  p.cut()
+  if (opts.kickDrawer) p.openCashDrawer()
+  await p.execute()
+}
+
+export async function printReportWithRetry(cfg: PrinterCfg, r: DayReport, opts: { kickDrawer?: boolean } = {}, tries = 3) {
+  let lastErr: unknown
+  for (let i = 0; i < tries; i++) {
+    try {
+      await reportOnce(cfg, r, opts)
       printEvents.emit('ok', { station: cfg.station })
       return
     } catch (e) {

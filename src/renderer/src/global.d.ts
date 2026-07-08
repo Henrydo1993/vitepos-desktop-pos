@@ -1,6 +1,16 @@
 import type { MenuItem, Variation, CartLine } from './types'
 
 declare global {
+  interface Shift {
+    id: number
+    opened_at: string
+    opened_by: string | null
+    opening_float: number
+    closed_at?: string | null
+    closed_by?: string | null
+    counted_cash?: number | null
+    status: string
+  }
   interface Window {
     pos: {
       syncCatalog: () => Promise<{ products: number; categories: number }>
@@ -44,6 +54,17 @@ declare global {
       }) => Promise<{ id: number }>
       openOrderSend: (p: { id?: number; tableLabel?: string; note?: string; staffName?: string | null; lines?: CartLine[] }) => Promise<{ id: number; printed: number }>
       openOrderClose: (id: number) => Promise<{ ok: boolean }>
+      shiftCurrent: () => Promise<Shift | null>
+      shiftOpen: (openingFloat: number, staffName?: string) => Promise<Shift>
+      shiftSummary: () => Promise<{
+        shift: Shift
+        orders: number
+        gross: number
+        byMethod: { method: string; n: number; amt: number }[]
+        cashSales: number
+        cashExpected: number
+      } | null>
+      shiftClose: (countedCash: number | null, staffName?: string) => Promise<{ ok: boolean }>
       getSettings: () => Promise<Record<string, string>>
       saveSettings: (patch: Record<string, string>) => Promise<{ ok: boolean }>
       searchCustomers: (q: string) => Promise<

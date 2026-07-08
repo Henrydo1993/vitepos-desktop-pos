@@ -10,8 +10,8 @@ import { pollOnline } from '../sync/online'
 import { getSettings, saveSettings, seedPrintersFromSettings, type Settings } from '../config'
 import { priceOrder, type PriceLine, type Discount } from '../order/pricing'
 import { routeByStation, type TicketItem } from '../print/router'
-import { buildKitchenTicket, DEFAULT_RECEIPT, type ReceiptConfig } from '../print/tickets'
-import { printWithRetry, printReceiptWithRetry, type PrinterCfg } from '../print/engine'
+import { buildKitchenTicket, DEFAULT_RECEIPT, type ReceiptConfig, type DayReport } from '../print/tickets'
+import { printWithRetry, printReceiptWithRetry, printReportWithRetry, type PrinterCfg } from '../print/engine'
 
 type Notify = (channel: string, data: unknown) => void
 type SessionRef = { current: Session }
@@ -83,6 +83,26 @@ function saveOpenOrder(db: BetterSqlite3.Database, p: OpenOrderPayload): number 
     .prepare('INSERT INTO open_orders (table_label,order_type,note,customer_id,customer_name,staff_name,lines,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)')
     .run(p.tableLabel ?? null, p.orderType ?? 'table', p.note ?? '', p.customerId ?? null, p.customerName ?? null, p.staffName ?? null, linesJson, now, now)
   return Number(info.lastInsertRowid)
+}
+
+interface ShiftRow {
+  id: number
+  opened_at: string
+  opened_by: string | null
+  opening_float: number
+  closed_at: string | null
+  closed_by: string | null
+  counted_cash: number | null
+  status: string
+}
+function computeShiftSummary(db: BetterSqlite3.Database, shift: ShiftRow) {
+  const since = shift.opened_at
+  const sum = db.prepare('SELECT COUNT(*) orders, COALESCE(SUM(total),0) gross FROM orders WHERE voided=0 AND created_at >= ?').get(since) as { orders: number; gross: number }
+  const byMethod = db
+    .prepare('SELECT payment_method method, COUNT(*) n, COALESCE(SUM(total),0) amt FROM orders WHERE voided=0 AND created_at >= ? GROUP BY payment_method ORDER BY amt DESC')
+    .all(since) as { method: string; n: number; amt: number }[]
+  const cash = db.prepare("SELECT COALESCE(SUM(total),0) c FROM orders WHERE voided=0 AND payment_method='cash' AND created_at >= ?").get(since) as { c: number }
+  return { orders: sum.orders, gross: sum.gross, byMethod, cashSales: cash.c, cashExpected: (shift.opening_float || 0) + cash.c }
 }
 
 function printReceiptAndTickets(
@@ -321,6 +341,57 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
   ipcMain.handle('openorder:close', (_e, id: number) => {
     db.prepare('DELETE FROM open_orders WHERE id=?').run(id)
     return { ok: true }
+  })
+
+  // --- Shift: start-of-day float + end-of-day summary ---
+  const currentShift = () => db.prepare("SELECT * FROM shifts WHERE status='open' ORDER BY id DESC LIMIT 1").get() as ShiftRow | undefined
+  ipcMain.handle('shift:current', () => currentShift() ?? null)
+  ipcMain.handle('shift:open', (_e, openingFloat: number, staffName?: string) => {
+    const existing = currentShift()
+    if (existing) return existing
+    const now = new Date().toISOString()
+    const float = Number(openingFloat) || 0
+    const info = db.prepare("INSERT INTO shifts (opened_at,opened_by,opening_float,status) VALUES (?,?,?,'open')").run(now, staffName ?? null, float)
+    const byStation = printersOf(db)
+    if (byStation.counter) {
+      void printWithRetry(
+        byStation.counter,
+        `DAY STARTED\n${new Date().toLocaleString('en-AU')}\nOpening float: $${float.toFixed(2)}${staffName ? '\n' + staffName : ''}`,
+        { kickDrawer: true },
+      )
+    }
+    return db.prepare('SELECT * FROM shifts WHERE id=?').get(info.lastInsertRowid)
+  })
+  ipcMain.handle('shift:summary', () => {
+    const shift = currentShift()
+    return shift ? { shift, ...computeShiftSummary(db, shift) } : null
+  })
+  ipcMain.handle('shift:close', (_e, countedCash: number | null, staffName?: string) => {
+    const shift = currentShift()
+    if (!shift) return { ok: false }
+    const s = computeShiftSummary(db, shift)
+    const now = new Date().toISOString()
+    const counted = countedCash === null || countedCash === undefined || (countedCash as unknown) === '' ? null : Number(countedCash)
+    db.prepare("UPDATE shifts SET status='closed', closed_at=?, closed_by=?, counted_cash=? WHERE id=?").run(now, staffName ?? null, counted, shift.id)
+    const tf = { hour: 'numeric', minute: '2-digit', hour12: true } as const
+    const report: DayReport = {
+      shopName: getReceiptCfg(db).shopName,
+      date: new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+      openedAt: new Date(shift.opened_at).toLocaleTimeString('en-AU', tf),
+      openedBy: shift.opened_by ?? '',
+      closedAt: new Date(now).toLocaleTimeString('en-AU', tf),
+      closedBy: staffName ?? '',
+      orders: s.orders,
+      gross: s.gross,
+      byMethod: s.byMethod,
+      openingFloat: shift.opening_float || 0,
+      cashSales: s.cashSales,
+      cashExpected: s.cashExpected,
+      countedCash: counted,
+    }
+    const byStation = printersOf(db)
+    if (byStation.counter) void printReportWithRetry(byStation.counter, report, { kickDrawer: true })
+    return { ok: true, report }
   })
 
   // --- Settings ---

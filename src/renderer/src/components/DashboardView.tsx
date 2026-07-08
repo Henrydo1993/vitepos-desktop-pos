@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ShiftModal } from './ShiftModal'
 
 interface Dash {
   orders: number
@@ -10,8 +11,13 @@ interface Dash {
 
 export function DashboardView() {
   const [d, setD] = useState<Dash | null>(null)
+  const [shift, setShift] = useState<Shift | null>(null)
+  const [modal, setModal] = useState<'open' | 'close' | null>(null)
   useEffect(() => {
-    const load = () => window.pos.dashToday().then(setD)
+    const load = () => {
+      window.pos.dashToday().then(setD)
+      window.pos.shiftCurrent().then(setShift)
+    }
     load()
     const t = setInterval(load, 30000)
     return () => clearInterval(t)
@@ -30,6 +36,20 @@ export function DashboardView() {
         <div className="dv-empty">Loading…</div>
       ) : (
         <div className="dv-body">
+          <div className="dv-shift">
+            {shift ? (
+              <span>
+                <b>Day open</b> · started {new Date(shift.opened_at).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })} · float ${shift.opening_float.toFixed(2)}
+              </span>
+            ) : (
+              <span>
+                <b>Day not started</b> · set your opening cash to begin
+              </span>
+            )}
+            <button className="btn btn-theme" onClick={() => setModal(shift ? 'close' : 'open')}>
+              {shift ? 'End of day' : 'Start day'}
+            </button>
+          </div>
           <div className="dv-stats">
             <div className="dv-stat big">
               <div className="dv-lbl">Sales today</div>
@@ -84,12 +104,24 @@ export function DashboardView() {
           </div>
         </div>
       )}
+      {modal && (
+        <ShiftModal
+          mode={modal}
+          onClose={() => setModal(null)}
+          onDone={() => {
+            setModal(null)
+            window.pos.shiftCurrent().then(setShift)
+            window.pos.dashToday().then(setD)
+          }}
+        />
+      )}
     </div>
   )
 }
 
 const DV_CSS = `
 .dv{display:flex;flex-direction:column;height:100%;background:var(--vt-panel-bg,#f4f6fa);overflow:hidden}
+.dv-shift{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#fff;border:1px solid #eef1f5;border-radius:14px;padding:14px 18px;margin-bottom:16px;font-size:14px;color:#334155}
 .dv-head{display:flex;align-items:baseline;gap:14px;padding:16px 22px;background:#fff;border-bottom:1px solid #eef1f5}
 .dv-head h2{font-size:20px;font-weight:800;color:#0f172a;margin:0}
 .dv-date{color:#6b7280;font-size:14px}

@@ -69,6 +69,23 @@ export interface ReceiptData {
   staffName?: string
 }
 
+// End-of-day summary printed on the counter at close.
+export interface DayReport {
+  shopName: string
+  date: string
+  openedAt: string
+  openedBy: string
+  closedAt: string
+  closedBy: string
+  orders: number
+  gross: number
+  byMethod: { method: string; n: number; amt: number }[]
+  openingFloat: number
+  cashSales: number
+  cashExpected: number
+  countedCash: number | null
+}
+
 // Fallback when the store config hasn't been fetched yet (first run / offline).
 export const DEFAULT_RECEIPT: ReceiptConfig = {
   shopName: 'Receipt',

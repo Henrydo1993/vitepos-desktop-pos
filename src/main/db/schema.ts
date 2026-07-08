@@ -33,6 +33,10 @@ const STATEMENTS: string[] = [
       id INTEGER PRIMARY KEY AUTOINCREMENT, table_label TEXT, order_type TEXT DEFAULT 'table',
       note TEXT, customer_id INTEGER, customer_name TEXT, staff_name TEXT,
       lines TEXT, created_at TEXT, updated_at TEXT )`,
+  // Day/shift session: opening cash float + end-of-day close.
+  `CREATE TABLE IF NOT EXISTS shifts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, opened_at TEXT, opened_by TEXT, opening_float REAL DEFAULT 0,
+      closed_at TEXT, closed_by TEXT, counted_cash REAL, status TEXT DEFAULT 'open' )`,
   `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)`,
 ]
 
