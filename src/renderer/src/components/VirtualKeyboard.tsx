@@ -142,7 +142,7 @@ const VK_CSS = `
 .vk-readout{display:flex;align-items:center;background:#fff;border:1px solid #c4c8cf;border-radius:9px;
  min-height:42px;padding:0 14px;font-size:18px;color:#1f2430;overflow:hidden;white-space:nowrap;margin-bottom:2px}
 .vk-ph{color:#9aa1ab}
-.vk-caret{display:inline-block;width:2px;height:21px;background:#2563eb;margin-left:1px;flex:none;animation:vkblink 1s steps(1) infinite}
+.vk-caret{display:inline-block;width:2px;height:21px;background:#1e3a8a;margin-left:1px;flex:none;animation:vkblink 1s steps(1) infinite}
 @keyframes vkblink{50%{opacity:0}}
 .vk-row{display:flex;gap:6px;justify-content:center}
 .vk-key{flex:1 1 0;max-width:96px;height:50px;border:1px solid #c4c8cf;border-radius:9px;background:#fff;
@@ -151,6 +151,6 @@ const VK_CSS = `
 .vk-key:active{background:#cfd4dc;transform:translateY(1px)}
 .vk-key.wide{max-width:118px;font-size:16px;font-weight:600}
 .vk-key.space{max-width:520px;flex:4}
-.vk-key.on{background:#2563eb;color:#fff;border-color:#2563eb}
+.vk-key.on{background:#1e3a8a;color:#fff;border-color:#1e3a8a}
 .vk-key.done{background:#0a296d;color:#fff;font-weight:700}
 `

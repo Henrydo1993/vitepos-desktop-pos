@@ -1,8 +1,8 @@
 /* Design tokens lifted from Vitepos default skin (color-default.css). */
 :root {
-  --vt-main: #2563eb;
-  --vt-main-2: #3570f0;
-  --vt-main-active: #0049c6;
+  --vt-main: #1e3a8a;
+  --vt-main-2: #294dab;
+  --vt-main-active: #142a6b;
   --vt-pay-bg: #0a296d;
   --vt-pay-hover: #082056;
   --vt-del: #e0405a;
@@ -13,7 +13,7 @@
   --vt-text: #4b5563;
   --vt-text-2: #8894a5;
   --vt-ink: #1f2937;
-  --vt-shadow: rgba(60, 116, 237, 0.16);
+  --vt-shadow: rgba(30, 58, 138, 0.16);
   --nav-w: 90px;
   --cart-w: 400px;
 }

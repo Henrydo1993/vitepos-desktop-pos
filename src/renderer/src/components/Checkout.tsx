@@ -136,16 +136,16 @@ export function Checkout({ onClose }: { onClose: () => void }) {
 const CO_CSS = `
 .co{display:flex;flex-direction:column;height:100%;background:#fff;overflow:hidden}
 .co-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eef1f5;background:#f7f9fc}
-.co-back{background:var(--vt-main,#2563eb);color:#fff;border:none;border-radius:9px;padding:9px 14px;font-size:14px;font-weight:700;cursor:pointer}
+.co-back{background:var(--vt-main,#1e3a8a);color:#fff;border:none;border-radius:9px;padding:9px 14px;font-size:14px;font-weight:700;cursor:pointer}
 .co-title{font-size:18px;font-weight:800;color:#0f172a}
 .co-body{flex:1;overflow:auto;padding:18px 22px;max-width:840px;width:100%;margin:0 auto}
 .co-total{text-align:center;font-size:52px;font-weight:800;color:#0f172a;margin:6px 0 20px;font-variant-numeric:tabular-nums}
 .co-methods{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
 .co-method{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 8px;border:1px solid #e5e8ee;border-radius:14px;background:#f4f7fb;font-size:13px;font-weight:700;color:#334155;cursor:pointer}
 .co-method .co-mi{font-size:26px}
-.co-method.on{background:var(--vt-main,#2563eb);color:#fff;border-color:var(--vt-main,#2563eb)}
+.co-method.on{background:var(--vt-main,#1e3a8a);color:#fff;border-color:var(--vt-main,#1e3a8a)}
 .co-quick{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
-.co-chip{padding:12px 6px;border:1px solid #c9d8f5;border-radius:10px;background:#eaf1ff;color:#1e40af;font-size:15px;font-weight:700;cursor:pointer}
+.co-chip{padding:12px 6px;border:1px solid #c9d8f5;border-radius:10px;background:#eaf1ff;color:#1e3a8a;font-size:15px;font-weight:700;cursor:pointer}
 .co-chip:active{background:#dbe7ff}
 .co-two{display:flex;gap:22px;align-items:flex-start}
 .co-left{flex:1;min-width:0}
@@ -159,6 +159,6 @@ const CO_CSS = `
 .co-return{font-size:14px;color:#64748b;white-space:nowrap}
 .co-return b{color:#0f172a;font-size:16px;margin-left:4px}
 .co-due{flex:1;text-align:center;font-size:22px;font-weight:800;color:#0f172a;font-variant-numeric:tabular-nums}
-.co-pay{background:var(--vt-main,#2563eb);color:#fff;border:none;border-radius:32px;padding:16px 32px;font-size:17px;font-weight:800;cursor:pointer;white-space:nowrap}
+.co-pay{background:var(--vt-main,#1e3a8a);color:#fff;border:none;border-radius:32px;padding:16px 32px;font-size:17px;font-weight:800;cursor:pointer;white-space:nowrap}
 .co-pay:disabled{background:#aab6c8;cursor:default}
 `

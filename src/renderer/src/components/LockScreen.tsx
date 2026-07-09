@@ -162,7 +162,7 @@ const LOCK_CSS = `
 .lock-av{width:130px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:18px 10px;border-radius:16px;
  border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;cursor:pointer}
 .lock-av:active{background:rgba(255,255,255,.16)}
-.lock-av-c{width:60px;height:60px;border-radius:50%;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800}
+.lock-av-c{width:60px;height:60px;border-radius:50%;background:#1e3a8a;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800}
 .lock-av.add .lock-av-c{background:rgba(255,255,255,.14)}
 .lock-av-n{font-size:15px;font-weight:700}
 .lock-av-r{font-size:12px;opacity:.6;text-transform:capitalize}

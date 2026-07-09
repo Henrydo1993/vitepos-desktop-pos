@@ -96,9 +96,9 @@ const OV_CSS = `
 .ov-head h2{font-size:20px;font-weight:800;color:#0f172a;margin:0}
 .ov-seg{display:flex;border:1px solid var(--vt-border,#e5e8ee);border-radius:9px;overflow:hidden}
 .ov-seg button{border:none;background:#fff;padding:8px 16px;font-weight:700;font-size:13px;color:#64748b;cursor:pointer}
-.ov-seg button.on{background:var(--vt-main,#2563eb);color:#fff}
+.ov-seg button.on{background:var(--vt-main,#1e3a8a);color:#fff}
 .ov-search{flex:1;max-width:360px;height:40px;border:1px solid var(--vt-border,#e5e8ee);border-radius:9px;padding:0 14px;font-size:15px}
-.ov-refresh{height:40px;border:1px solid var(--vt-main,#2563eb);background:var(--vt-main,#2563eb);color:#fff;border-radius:9px;padding:0 16px;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap}
+.ov-refresh{height:40px;border:1px solid var(--vt-main,#1e3a8a);background:var(--vt-main,#1e3a8a);color:#fff;border-radius:9px;padding:0 16px;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap}
 .ov-refresh:disabled{opacity:.6;cursor:default}
 .ov-body{flex:1;overflow:auto;padding:14px 22px}
 .ov-table{background:#fff;border:1px solid #eef1f5;border-radius:12px;overflow:hidden}

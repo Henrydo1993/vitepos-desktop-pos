@@ -162,7 +162,7 @@ const DV_CSS = `
 .dv-empty{padding:40px;color:#6b7280}
 .dv-stats{display:grid;grid-template-columns:2fr 1fr 1fr;gap:14px;margin-bottom:18px}
 .dv-stat{background:#fff;border:1px solid #eef1f5;border-radius:14px;padding:18px 20px}
-.dv-stat.big{background:linear-gradient(135deg,#2563eb,#1e40af);color:#fff;border:none}
+.dv-stat.big{background:linear-gradient(135deg,#1e3a8a,#142a6b);color:#fff;border:none}
 .dv-lbl{font-size:13px;opacity:.75;font-weight:600;margin-bottom:6px}
 .dv-val{font-size:32px;font-weight:800;font-variant-numeric:tabular-nums}
 .dv-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}

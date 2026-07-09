@@ -107,7 +107,7 @@ const CALC_CSS = `
  font-weight:600;color:#1f2430;cursor:pointer}
 .calc-key:active{background:#eef1f6}
 .calc-key.act{background:#f2f4f8;color:#6b7280;font-size:16px}
-.calc-key.op{background:#eaf1ff;color:#1e40af;font-weight:800}
-.calc-key.op.on{background:#2563eb;color:#fff}
+.calc-key.op{background:#eaf1ff;color:#1e3a8a;font-weight:800}
+.calc-key.op.on{background:#1e3a8a;color:#fff}
 .calc-key.eq{background:#0a8a3f;color:#fff;font-weight:800}
 `
