@@ -6,7 +6,7 @@ import { listMenu } from '../db/repo'
 import { syncCatalog } from '../sync/catalog'
 import { fetchVariations, searchCustomers, createCustomer, fetchReceiptConfig, fetchOpalTables } from '../api/client'
 import { pushPending, reconcileDeletedOrders } from '../sync/orders'
-import { pollOnline, pollOpalOrders } from '../sync/online'
+import { pollOnline, pollOpalOrders, type OnlineOrder } from '../sync/online'
 import { getSettings, saveSettings, seedPrintersFromSettings, type Settings } from '../config'
 import { priceOrder, type PriceLine, type Discount } from '../order/pricing'
 import { routeByStation, type TicketItem } from '../print/router'
@@ -137,6 +137,46 @@ function computeShiftSummary(db: BetterSqlite3.Database, shift: ShiftRow) {
   return { orders: sum.orders, gross: sum.gross, byMethod, cashSales: cash.c, cashExpected: (shift.opening_float || 0) + cash.c }
 }
 
+// Merge an incoming ordering-app order into the table's open tab, so the floor shows the
+// table TAKEN and every order for it (QR scan, waiter, counter) accumulates into ONE bill —
+// no duplicate tabs. Items are marked sent (already printed to the kitchen).
+function mergeOpalTab(db: BetterSqlite3.Database, o: OnlineOrder) {
+  if (!o.table) return
+  const lines = o.items.map((it, i) => ({
+    id: o.remoteId * 1000 + i,
+    name: it.name,
+    price: it.price,
+    qty: it.qty,
+    station: it.station ?? 'kitchen',
+    modifiers: it.modifiers ?? [],
+    sent: true,
+  }))
+  const now = new Date().toISOString()
+  const existing = db.prepare('SELECT id, lines FROM open_orders WHERE table_label=? ORDER BY id DESC LIMIT 1').get(o.table) as
+    | { id: number; lines: string }
+    | undefined
+  if (existing) {
+    let prev: unknown[] = []
+    try {
+      prev = JSON.parse(existing.lines || '[]')
+    } catch {
+      /* ignore */
+    }
+    db.prepare('UPDATE open_orders SET lines=?, updated_at=? WHERE id=?').run(JSON.stringify([...prev, ...lines]), now, existing.id)
+  } else {
+    const who = o.source === 'waiter' ? 'Waiter' : 'QR order'
+    db.prepare('INSERT INTO open_orders (table_label,order_type,note,staff_name,lines,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').run(
+      o.table,
+      'table',
+      o.note ?? '',
+      who,
+      JSON.stringify(lines),
+      now,
+      now,
+    )
+  }
+}
+
 function printReceiptAndTickets(
   db: BetterSqlite3.Database,
   token: number,
@@ -205,7 +245,10 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     }
     try {
       const opal = await pollOpalOrders(db, sessionRef.current)
-      for (const o of opal) printReceiptAndTickets(db, o.token, o.items, null, { table: o.table, note: o.note, orderType: 'table' })
+      for (const o of opal) {
+        mergeOpalTab(db, o)
+        printReceiptAndTickets(db, o.token, o.items, null, { table: o.table, note: o.note, orderType: 'table' })
+      }
     } catch {
       /* offline */
     }
@@ -569,6 +612,7 @@ export function startSync(db: BetterSqlite3.Database, sessionRef: SessionRef, no
     try {
       const opal = await pollOpalOrders(db, sessionRef.current)
       for (const o of opal) {
+        mergeOpalTab(db, o)
         printReceiptAndTickets(db, o.token, o.items, null, { table: o.table, note: o.note, orderType: 'table' })
         notify('online:new', { token: o.token, total: o.total, items: o.items.length })
       }

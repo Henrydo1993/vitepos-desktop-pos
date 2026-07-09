@@ -10,6 +10,7 @@ export interface OnlineOrder {
   total: number
   table?: string
   note?: string
+  source?: string
 }
 
 // Defensive mapping — the exact online-order item shape is confirmed on the first real
@@ -57,7 +58,7 @@ export async function pollOpalOrders(db: Database.Database, s: Session): Promise
   for (const raw of rows) {
     if (!raw.id || seen.get(raw.id)) continue
     mark.run(raw.id, new Date().toISOString())
-    fresh.push({ remoteId: raw.id, token: raw.id, items: raw.items, total: 0, table: raw.table, note: raw.note })
+    fresh.push({ remoteId: raw.id, token: raw.id, items: raw.items, total: 0, table: raw.table, note: raw.note, source: raw.source })
   }
   return fresh
 }

@@ -72,6 +72,7 @@ export async function fetchOpalOrders(s: Session) {
       const guest = meta('_opc_guest_name')
       return {
         id: Number(o.id),
+        source: String(meta('_opc_source') ?? ''),
         table: stripHtml(meta('_opc_table') ?? ''),
         note: [guest ? `Guest: ${guest}` : '', kitchenNote].filter(Boolean).join(' · '),
         items: ((o.line_items ?? []) as any[]).map((li) => ({
