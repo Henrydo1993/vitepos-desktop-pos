@@ -13,10 +13,16 @@ export function DashboardView() {
   const [d, setD] = useState<Dash | null>(null)
   const [shift, setShift] = useState<Shift | null>(null)
   const [modal, setModal] = useState<'open' | 'close' | null>(null)
+  const [days, setDays] = useState<
+    { id: number; openedAt: string; closedAt: string | null; orders: number; gross: number; openingFloat: number; countedCash: number | null }[]
+  >([])
+  const [flash, setFlash] = useState('')
+  const [reprinting, setReprinting] = useState<number | null>(null)
   useEffect(() => {
     const load = () => {
       window.pos.dashToday().then(setD)
       window.pos.shiftCurrent().then(setShift)
+      window.pos.shiftList().then(setDays)
     }
     load()
     const t = setInterval(load, 30000)
@@ -24,6 +30,14 @@ export function DashboardView() {
   }, [])
 
   const today = new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+
+  const reprint = async (id: number) => {
+    setReprinting(id)
+    const r = await window.pos.shiftReport(id)
+    setReprinting(null)
+    setFlash(r.printed ? 'Report sent to the counter printer.' : 'No counter printer is set — nothing printed.')
+    setTimeout(() => setFlash(''), 3500)
+  }
 
   return (
     <div className="dv">
@@ -101,6 +115,22 @@ export function DashboardView() {
                 </div>
               ))}
             </div>
+
+            <div className="dv-card">
+              <h3>Reprint a day</h3>
+              {days.length === 0 && <div className="dv-none">No closed days yet.</div>}
+              {days.map((day) => (
+                <div className="dv-row" key={day.id}>
+                  <span className="dv-name">
+                    {new Date(day.closedAt || day.openedAt).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </span>
+                  <span className="dv-sub">${day.gross.toFixed(2)}</span>
+                  <button className="btn btn-sm" style={{ marginLeft: 10 }} onClick={() => reprint(day.id)} disabled={reprinting !== null}>
+                    {reprinting === day.id ? '…' : 'Reprint'}
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -112,9 +142,11 @@ export function DashboardView() {
             setModal(null)
             window.pos.shiftCurrent().then(setShift)
             window.pos.dashToday().then(setD)
+            window.pos.shiftList().then(setDays)
           }}
         />
       )}
+      {flash && <div className="dv-toast">{flash}</div>}
     </div>
   )
 }
@@ -122,6 +154,7 @@ export function DashboardView() {
 const DV_CSS = `
 .dv{display:flex;flex-direction:column;height:100%;background:var(--vt-panel-bg,#f4f6fa);overflow:hidden}
 .dv-shift{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#fff;border:1px solid #eef1f5;border-radius:14px;padding:14px 18px;margin-bottom:16px;font-size:14px;color:#334155}
+.dv-toast{position:fixed;bottom:22px;right:22px;background:#0f172a;color:#fff;padding:12px 18px;border-radius:10px;font-weight:600;box-shadow:0 10px 26px rgba(0,0,0,.25);z-index:60}
 .dv-head{display:flex;align-items:baseline;gap:14px;padding:16px 22px;background:#fff;border-bottom:1px solid #eef1f5}
 .dv-head h2{font-size:20px;font-weight:800;color:#0f172a;margin:0}
 .dv-date{color:#6b7280;font-size:14px}

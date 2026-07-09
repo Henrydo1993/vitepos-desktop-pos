@@ -96,12 +96,15 @@ interface ShiftRow {
   status: string
 }
 function computeShiftSummary(db: BetterSqlite3.Database, shift: ShiftRow) {
-  const since = shift.opened_at
-  const sum = db.prepare('SELECT COUNT(*) orders, COALESCE(SUM(total),0) gross FROM orders WHERE voided=0 AND created_at >= ?').get(since) as { orders: number; gross: number }
+  // Open shift: everything since it opened. Closed shift: bounded to its close
+  // time, so a reprint reflects that day only — not orders taken afterwards.
+  const win = shift.closed_at ? 'created_at >= ? AND created_at < ?' : 'created_at >= ?'
+  const args: string[] = shift.closed_at ? [shift.opened_at, shift.closed_at] : [shift.opened_at]
+  const sum = db.prepare(`SELECT COUNT(*) orders, COALESCE(SUM(total),0) gross FROM orders WHERE voided=0 AND ${win}`).get(...args) as { orders: number; gross: number }
   const byMethod = db
-    .prepare('SELECT payment_method method, COUNT(*) n, COALESCE(SUM(total),0) amt FROM orders WHERE voided=0 AND created_at >= ? GROUP BY payment_method ORDER BY amt DESC')
-    .all(since) as { method: string; n: number; amt: number }[]
-  const cash = db.prepare("SELECT COALESCE(SUM(total),0) c FROM orders WHERE voided=0 AND payment_method='cash' AND created_at >= ?").get(since) as { c: number }
+    .prepare(`SELECT payment_method method, COUNT(*) n, COALESCE(SUM(total),0) amt FROM orders WHERE voided=0 AND ${win} GROUP BY payment_method ORDER BY amt DESC`)
+    .all(...args) as { method: string; n: number; amt: number }[]
+  const cash = db.prepare(`SELECT COALESCE(SUM(total),0) c FROM orders WHERE voided=0 AND payment_method='cash' AND ${win}`).get(...args) as { c: number }
   return { orders: sum.orders, gross: sum.gross, byMethod, cashSales: cash.c, cashExpected: (shift.opening_float || 0) + cash.c }
 }
 
@@ -345,6 +348,26 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
 
   // --- Shift: start-of-day float + end-of-day summary ---
   const currentShift = () => db.prepare("SELECT * FROM shifts WHERE status='open' ORDER BY id DESC LIMIT 1").get() as ShiftRow | undefined
+  const buildDayReport = (shift: ShiftRow): DayReport => {
+    const s = computeShiftSummary(db, shift)
+    const tf = { hour: 'numeric', minute: '2-digit', hour12: true } as const
+    const closedIso = shift.closed_at ?? new Date().toISOString()
+    return {
+      shopName: getReceiptCfg(db).shopName,
+      date: new Date(closedIso).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+      openedAt: new Date(shift.opened_at).toLocaleTimeString('en-AU', tf),
+      openedBy: shift.opened_by ?? '',
+      closedAt: new Date(closedIso).toLocaleTimeString('en-AU', tf),
+      closedBy: shift.closed_by ?? '',
+      orders: s.orders,
+      gross: s.gross,
+      byMethod: s.byMethod,
+      openingFloat: shift.opening_float || 0,
+      cashSales: s.cashSales,
+      cashExpected: s.cashExpected,
+      countedCash: shift.counted_cash ?? null,
+    }
+  }
   ipcMain.handle('shift:current', () => currentShift() ?? null)
   ipcMain.handle('shift:open', (_e, openingFloat: number, staffName?: string) => {
     const existing = currentShift()
@@ -369,29 +392,29 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
   ipcMain.handle('shift:close', (_e, countedCash: number | null, staffName?: string) => {
     const shift = currentShift()
     if (!shift) return { ok: false }
-    const s = computeShiftSummary(db, shift)
     const now = new Date().toISOString()
     const counted = countedCash === null || countedCash === undefined || (countedCash as unknown) === '' ? null : Number(countedCash)
     db.prepare("UPDATE shifts SET status='closed', closed_at=?, closed_by=?, counted_cash=? WHERE id=?").run(now, staffName ?? null, counted, shift.id)
-    const tf = { hour: 'numeric', minute: '2-digit', hour12: true } as const
-    const report: DayReport = {
-      shopName: getReceiptCfg(db).shopName,
-      date: new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-      openedAt: new Date(shift.opened_at).toLocaleTimeString('en-AU', tf),
-      openedBy: shift.opened_by ?? '',
-      closedAt: new Date(now).toLocaleTimeString('en-AU', tf),
-      closedBy: staffName ?? '',
-      orders: s.orders,
-      gross: s.gross,
-      byMethod: s.byMethod,
-      openingFloat: shift.opening_float || 0,
-      cashSales: s.cashSales,
-      cashExpected: s.cashExpected,
-      countedCash: counted,
-    }
+    const closed = db.prepare('SELECT * FROM shifts WHERE id=?').get(shift.id) as ShiftRow
+    const report = buildDayReport(closed)
     const byStation = printersOf(db)
     if (byStation.counter) void printReportWithRetry(byStation.counter, report, { kickDrawer: true })
     return { ok: true, report }
+  })
+  ipcMain.handle('shift:list', () => {
+    const rows = db.prepare("SELECT * FROM shifts WHERE status='closed' ORDER BY id DESC LIMIT 14").all() as ShiftRow[]
+    return rows.map((r) => {
+      const s = computeShiftSummary(db, r)
+      return { id: r.id, openedAt: r.opened_at, closedAt: r.closed_at, orders: s.orders, gross: s.gross, openingFloat: r.opening_float || 0, countedCash: r.counted_cash ?? null }
+    })
+  })
+  ipcMain.handle('shift:report', (_e, id: number) => {
+    const shift = db.prepare('SELECT * FROM shifts WHERE id=?').get(id) as ShiftRow | undefined
+    if (!shift) return { ok: false, printed: false }
+    const report = buildDayReport(shift)
+    const byStation = printersOf(db)
+    if (byStation.counter) void printReportWithRetry(byStation.counter, report, { kickDrawer: false })
+    return { ok: true, printed: !!byStation.counter }
   })
 
   // --- Settings ---

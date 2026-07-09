@@ -37,6 +37,8 @@ const pos = {
   shiftOpen: (openingFloat: number, staffName?: string) => ipcRenderer.invoke('shift:open', openingFloat, staffName),
   shiftSummary: () => ipcRenderer.invoke('shift:summary'),
   shiftClose: (countedCash: number | null, staffName?: string) => ipcRenderer.invoke('shift:close', countedCash, staffName),
+  shiftList: () => ipcRenderer.invoke('shift:list'),
+  shiftReport: (id: number) => ipcRenderer.invoke('shift:report', id),
   onOnlineOrder: (cb: (data: { token: number; total: number; items: number }) => void) => {
     const listener = (_e: IpcRendererEvent, data: { token: number; total: number; items: number }) => cb(data)
     ipcRenderer.on('online:new', listener)

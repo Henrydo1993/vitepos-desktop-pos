@@ -65,6 +65,10 @@ declare global {
         cashExpected: number
       } | null>
       shiftClose: (countedCash: number | null, staffName?: string) => Promise<{ ok: boolean }>
+      shiftList: () => Promise<
+        { id: number; openedAt: string; closedAt: string | null; orders: number; gross: number; openingFloat: number; countedCash: number | null }[]
+      >
+      shiftReport: (id: number) => Promise<{ ok: boolean; printed?: boolean }>
       getSettings: () => Promise<Record<string, string>>
       saveSettings: (patch: Record<string, string>) => Promise<{ ok: boolean }>
       searchCustomers: (q: string) => Promise<
