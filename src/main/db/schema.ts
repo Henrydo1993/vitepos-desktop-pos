@@ -25,6 +25,8 @@ const STATEMENTS: string[] = [
       product_id INTEGER, name TEXT, qty INTEGER, price REAL, station TEXT,
       modifiers TEXT, FOREIGN KEY(order_id) REFERENCES orders(id) )`,
   `CREATE TABLE IF NOT EXISTS seen_online (remote_id INTEGER PRIMARY KEY, seen_at TEXT)`,
+  // Ordering-app (opal-pos-connect) orders already printed, so they print once.
+  `CREATE TABLE IF NOT EXISTS seen_opal (remote_id INTEGER PRIMARY KEY, seen_at TEXT)`,
   `CREATE TABLE IF NOT EXISTS staff (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, pin_hash TEXT NOT NULL,
       role TEXT DEFAULT 'staff', active INTEGER DEFAULT 1, created_at TEXT )`,

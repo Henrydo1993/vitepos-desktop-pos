@@ -54,6 +54,37 @@ export async function fetchOpalTables(s: Session) {
     .filter((t) => t.label)
 }
 
+// Ordering-app orders straight from WooCommerce (status active + _opc_source meta).
+// Vitepos online-list relays these foreign orders WITHOUT line items, so the POS could
+// never print them; wc/v3 returns the full order and the POS app-password authorises it.
+// Bounded to the last 3h so a first poll after an update doesn't reprint history.
+export async function fetchOpalOrders(s: Session) {
+  const after = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()
+  const res = await s.http.get(`/?rest_route=/wc/v3/orders&per_page=30&order=asc&orderby=id&after=${encodeURIComponent(after)}`)
+  const orders = (Array.isArray(res.data) ? res.data : []) as any[]
+  const active = new Set(['processing', 'on-hold', 'pending'])
+  return orders
+    .filter((o) => active.has(String(o.status)) && (o.meta_data ?? []).some((m: any) => m.key === '_opc_source'))
+    .map((o) => {
+      const meta = (k: string) => (o.meta_data ?? []).find((m: any) => m.key === k)?.value
+      const rawNote = String(o.customer_note ?? '')
+      const kitchenNote = rawNote.includes(' · ') ? rawNote.split(' · ').slice(1).join(' · ') : ''
+      const guest = meta('_opc_guest_name')
+      return {
+        id: Number(o.id),
+        table: stripHtml(meta('_opc_table') ?? ''),
+        note: [guest ? `Guest: ${guest}` : '', kitchenNote].filter(Boolean).join(' · '),
+        items: ((o.line_items ?? []) as any[]).map((li) => ({
+          name: stripHtml(li.name ?? 'Item'),
+          qty: Number(li.quantity ?? 1),
+          price: Number(li.price ?? li.total ?? 0),
+          station: 'kitchen',
+          modifiers: [] as string[],
+        })),
+      }
+    })
+}
+
 // POS orders currently live on the store (WooCommerce, _is_vitepos). Used to
 // reconcile local orders against the store (drop ones deleted on the store).
 export async function fetchOrderList(s: Session, limit = 100) {

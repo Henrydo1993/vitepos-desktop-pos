@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import type { Session } from '../api/auth'
-import { fetchOnlineOrders } from '../api/client'
+import { fetchOnlineOrders, fetchOpalOrders } from '../api/client'
 import type { TicketItem } from '../print/router'
 
 export interface OnlineOrder {
@@ -8,6 +8,8 @@ export interface OnlineOrder {
   token: number
   items: (TicketItem & { price: number })[]
   total: number
+  table?: string
+  note?: string
 }
 
 // Defensive mapping — the exact online-order item shape is confirmed on the first real
@@ -40,6 +42,22 @@ export async function pollOnline(db: Database.Database, s: Session): Promise<Onl
     if (!o.remoteId || seen.get(o.remoteId)) continue
     mark.run(o.remoteId, new Date().toISOString())
     fresh.push(o)
+  }
+  return fresh
+}
+
+// Ordering-app orders polled straight from WooCommerce (see fetchOpalOrders). A separate
+// seen table keeps it from colliding with the Vitepos online-list poll. Carries the table
+// label + note so the prepare ticket prints big with the table name.
+export async function pollOpalOrders(db: Database.Database, s: Session): Promise<OnlineOrder[]> {
+  const rows = await fetchOpalOrders(s)
+  const seen = db.prepare(`SELECT 1 FROM seen_opal WHERE remote_id=?`)
+  const mark = db.prepare(`INSERT OR IGNORE INTO seen_opal (remote_id, seen_at) VALUES (?, ?)`)
+  const fresh: OnlineOrder[] = []
+  for (const raw of rows) {
+    if (!raw.id || seen.get(raw.id)) continue
+    mark.run(raw.id, new Date().toISOString())
+    fresh.push({ remoteId: raw.id, token: raw.id, items: raw.items, total: 0, table: raw.table, note: raw.note })
   }
   return fresh
 }

@@ -6,7 +6,7 @@ import { listMenu } from '../db/repo'
 import { syncCatalog } from '../sync/catalog'
 import { fetchVariations, searchCustomers, createCustomer, fetchReceiptConfig, fetchOpalTables } from '../api/client'
 import { pushPending, reconcileDeletedOrders } from '../sync/orders'
-import { pollOnline } from '../sync/online'
+import { pollOnline, pollOpalOrders } from '../sync/online'
 import { getSettings, saveSettings, seedPrintersFromSettings, type Settings } from '../config'
 import { priceOrder, type PriceLine, type Discount } from '../order/pricing'
 import { routeByStation, type TicketItem } from '../print/router'
@@ -200,6 +200,12 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     try {
       const fresh = await pollOnline(db, sessionRef.current)
       for (const o of fresh) printReceiptAndTickets(db, o.token, o.items, null)
+    } catch {
+      /* offline */
+    }
+    try {
+      const opal = await pollOpalOrders(db, sessionRef.current)
+      for (const o of opal) printReceiptAndTickets(db, o.token, o.items, null, { table: o.table, note: o.note, orderType: 'table' })
     } catch {
       /* offline */
     }
@@ -555,6 +561,15 @@ export function startSync(db: BetterSqlite3.Database, sessionRef: SessionRef, no
       const fresh = await pollOnline(db, sessionRef.current)
       for (const o of fresh) {
         printReceiptAndTickets(db, o.token, o.items, null)
+        notify('online:new', { token: o.token, total: o.total, items: o.items.length })
+      }
+    } catch {
+      /* offline */
+    }
+    try {
+      const opal = await pollOpalOrders(db, sessionRef.current)
+      for (const o of opal) {
+        printReceiptAndTickets(db, o.token, o.items, null, { table: o.table, note: o.note, orderType: 'table' })
         notify('online:new', { token: o.token, total: o.total, items: o.items.length })
       }
     } catch {
