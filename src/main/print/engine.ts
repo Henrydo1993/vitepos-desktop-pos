@@ -1,6 +1,6 @@
 import { ThermalPrinter, PrinterTypes } from 'node-thermal-printer'
 import { EventEmitter } from 'node:events'
-import type { ReceiptConfig, ReceiptData, DayReport } from './tickets'
+import type { ReceiptConfig, ReceiptData, DayReport, KitchenTicket } from './tickets'
 
 // address: 'tcp://192.168.1.50' (network) or a USB device path
 export interface PrinterCfg {
@@ -179,6 +179,70 @@ export async function printReportWithRetry(cfg: PrinterCfg, r: DayReport, opts: 
   for (let i = 0; i < tries; i++) {
     try {
       await reportOnce(cfg, r, opts)
+      printEvents.emit('ok', { station: cfg.station })
+      return
+    } catch (e) {
+      lastErr = e
+      await new Promise((res) => setTimeout(res, 400 * (i + 1)))
+    }
+  }
+  printEvents.emit('fail', { station: cfg.station, error: String(lastErr) })
+  throw lastErr
+}
+
+// Kitchen / "PREPARE" slip — big text so it reads across the room; the table
+// name is the largest thing on the ticket (3x), items are 2x.
+async function kitchenOnce(cfg: PrinterCfg, t: KitchenTicket) {
+  const p = make(cfg)
+  if (!(await p.isPrinterConnected())) throw new Error(`printer ${cfg.station} offline (${cfg.address})`)
+  p.alignCenter()
+  p.bold(true)
+  p.setTextSize(1, 1)
+  p.println(`*** ${t.station} ***`)
+  p.setTextNormal()
+  p.bold(false)
+  if (t.table) {
+    p.bold(true)
+    p.setTextSize(2, 2)
+    p.println(t.table.toUpperCase())
+    p.setTextNormal()
+    p.bold(false)
+  }
+  p.bold(true)
+  p.setTextSize(1, 1)
+  p.println(`TOKEN #${t.token}`)
+  p.setTextNormal()
+  p.bold(false)
+  if (t.orderType) p.println(t.orderType.replace('_', '-').toUpperCase())
+  p.drawLine()
+  p.alignLeft()
+  for (const it of t.items) {
+    p.setTextSize(1, 1)
+    p.println(`${it.qty} x ${it.name}`)
+    p.setTextNormal()
+    for (const m of it.modifiers ?? []) p.println(`   - ${m}`)
+  }
+  if (t.note) {
+    p.drawLine()
+    p.bold(true)
+    p.setTextSize(1, 1)
+    p.println(`NOTE: ${t.note}`)
+    p.setTextNormal()
+    p.bold(false)
+  }
+  p.drawLine()
+  p.alignCenter()
+  p.println(t.time)
+  p.newLine()
+  p.cut()
+  await p.execute()
+}
+
+export async function printKitchenWithRetry(cfg: PrinterCfg, t: KitchenTicket, tries = 3) {
+  let lastErr: unknown
+  for (let i = 0; i < tries; i++) {
+    try {
+      await kitchenOnce(cfg, t)
       printEvents.emit('ok', { station: cfg.station })
       return
     } catch (e) {

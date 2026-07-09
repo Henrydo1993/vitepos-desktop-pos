@@ -11,7 +11,7 @@ import { getSettings, saveSettings, seedPrintersFromSettings, type Settings } fr
 import { priceOrder, type PriceLine, type Discount } from '../order/pricing'
 import { routeByStation, type TicketItem } from '../print/router'
 import { buildKitchenTicket, DEFAULT_RECEIPT, type ReceiptConfig, type DayReport } from '../print/tickets'
-import { printWithRetry, printReceiptWithRetry, printReportWithRetry, type PrinterCfg } from '../print/engine'
+import { printWithRetry, printReceiptWithRetry, printReportWithRetry, printKitchenWithRetry, type PrinterCfg } from '../print/engine'
 
 type Notify = (channel: string, data: unknown) => void
 type SessionRef = { current: Session }
@@ -142,7 +142,7 @@ function printReceiptAndTickets(
   token: number,
   items: PricedItem[],
   totals: { subtotal: number; discount: number; tax: number; total: number; tender: number; change: number } | null,
-  meta: { orderType?: string; note?: string; customerName?: string; staffName?: string } = {},
+  meta: { orderType?: string; note?: string; customerName?: string; staffName?: string; table?: string } = {},
 ) {
   const byStation = printersOf(db)
   const receiptPrinted = !!(totals && byStation.counter)
@@ -157,13 +157,13 @@ function printReceiptAndTickets(
   const counterFallback: TicketItem[] = []
   for (const [station, list] of Object.entries(routeByStation(items))) {
     const cfg = byStation[station]
-    if (cfg) void printWithRetry(cfg, buildKitchenTicket({ token, station: station.toUpperCase(), items: list, orderType: meta.orderType, note: meta.note }))
+    if (cfg) void printKitchenWithRetry(cfg, buildKitchenTicket({ token, station: station.toUpperCase(), table: meta.table, items: list, orderType: meta.orderType, note: meta.note }))
     else counterFallback.push(...list)
   }
   // No dedicated kitchen/bar printer → print one prepare list on the counter, unless a
   // pay-first receipt already went there (it already lists the items).
   if (counterFallback.length && byStation.counter && !receiptPrinted) {
-    void printWithRetry(byStation.counter, buildKitchenTicket({ token, station: 'PREPARE', items: counterFallback, orderType: meta.orderType, note: meta.note }))
+    void printKitchenWithRetry(byStation.counter, buildKitchenTicket({ token, station: 'PREPARE', table: meta.table, items: counterFallback, orderType: meta.orderType, note: meta.note }))
   }
 }
 
@@ -358,17 +358,17 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
       for (const [station, list] of Object.entries(routeByStation(unsent))) {
         const cfg = byStation[station]
         if (cfg)
-          void printWithRetry(
+          void printKitchenWithRetry(
             cfg,
-            buildKitchenTicket({ token: id, station: `${station.toUpperCase()} · ${p.tableLabel ?? ''}`.trim(), items: list, orderType: 'table', note: p.note ?? undefined }),
+            buildKitchenTicket({ token: id, station: station.toUpperCase(), table: p.tableLabel ?? undefined, items: list, orderType: 'table', note: p.note ?? undefined }),
           )
         else counterFallback.push(...list)
       }
       // Single-printer shop (counter only): print the prepare list on the counter.
       if (counterFallback.length && byStation.counter) {
-        void printWithRetry(
+        void printKitchenWithRetry(
           byStation.counter,
-          buildKitchenTicket({ token: id, station: `PREPARE · ${p.tableLabel ?? ''}`.trim(), items: counterFallback, orderType: 'table', note: p.note ?? undefined }),
+          buildKitchenTicket({ token: id, station: 'PREPARE', table: p.tableLabel ?? undefined, items: counterFallback, orderType: 'table', note: p.note ?? undefined }),
         )
       }
     }

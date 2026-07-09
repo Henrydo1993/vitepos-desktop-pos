@@ -1,22 +1,34 @@
 import type { TicketItem } from './router'
 
+export interface KitchenTicket {
+  station: string
+  token: number
+  table?: string
+  orderType?: string
+  items: TicketItem[]
+  note?: string
+  time: string
+}
+
+// Kitchen / "PREPARE" ticket data. engine.ts kitchenOnce() renders it BIG — a
+// 3x table name and 2x items — so the kitchen can read it across the room.
 export function buildKitchenTicket(o: {
   token: number
   station: string
+  table?: string
   items: TicketItem[]
   orderType?: string
   note?: string
-}): string {
-  const lines = [`*** ${o.station} ***`, `TOKEN #${o.token}`]
-  if (o.orderType) lines.push(o.orderType.replace('_', '-').toUpperCase())
-  lines.push('--------------------------------')
-  for (const it of o.items) {
-    lines.push(`${it.qty} x ${it.name}`)
-    for (const m of it.modifiers ?? []) lines.push(`   - ${m}`)
+}): KitchenTicket {
+  return {
+    station: o.station,
+    token: o.token,
+    table: o.table,
+    orderType: o.orderType,
+    items: o.items,
+    note: o.note,
+    time: new Date().toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true }),
   }
-  if (o.note) lines.push('--------------------------------', `NOTE: ${o.note}`)
-  lines.push('--------------------------------', new Date().toLocaleTimeString())
-  return lines.join('\n')
 }
 
 // Receipt template mirrored from Vitepos `inv_settings` (fetched + cached from
