@@ -38,7 +38,9 @@ declare global {
       >
       syncNow: () => Promise<{ pending: number; pushed: number }>
       syncRefresh: () => Promise<{ products: number; pushed: number; removed: number }>
-      tablesList: () => Promise<{ label: string; open: { id: number; items: number; total: number; updatedAt: string } | null }[]>
+      tablesList: () => Promise<
+        { label: string; area?: string; seats?: number; open: { id: number; items: number; total: number; updatedAt: string } | null }[]
+      >
       openOrderGet: (
         id: number,
       ) => Promise<{ id: number; tableLabel: string; lines: CartLine[]; note: string; customerId: number | null; customerName: string | null } | null>

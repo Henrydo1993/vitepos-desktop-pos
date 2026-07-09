@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 
 export interface TableRow {
   label: string
+  area?: string
+  seats?: number
   open: { id: number; items: number; total: number; updatedAt: string } | null
 }
 
@@ -37,6 +39,7 @@ export function TablesView({ onOpen }: { onOpen: (t: TableRow) => void }) {
           {tables.map((t) => (
             <button key={t.label} type="button" className={`tv-table${t.open ? ' occ' : ''}`} onClick={() => onOpen(t)}>
               <div className="tv-label">{t.label}</div>
+              {t.area && <div className="tv-area">{t.area}</div>}
               {t.open ? (
                 <>
                   <div className="tv-total">${t.open.total.toFixed(2)}</div>
@@ -45,7 +48,7 @@ export function TablesView({ onOpen }: { onOpen: (t: TableRow) => void }) {
                   </div>
                 </>
               ) : (
-                <div className="tv-free">Free</div>
+                <div className="tv-free">Free{t.seats ? ` · ${t.seats} seats` : ''}</div>
               )}
             </button>
           ))}
@@ -66,9 +69,11 @@ const TV_CSS = `
  border:1px solid #e5e8ee;background:#fff;cursor:pointer;text-align:left}
 .tv-table:active{transform:translateY(1px)}
 .tv-label{font-size:18px;font-weight:800;color:#0f172a}
+.tv-area{font-size:12.5px;color:#6b7280;margin-top:-1px}
 .tv-free{margin-top:auto;font-size:14px;font-weight:600;color:#9aa1ab}
 .tv-table.occ{background:linear-gradient(135deg,#0a8a3f,#0b7a39);border-color:#0a8a3f;color:#fff}
 .tv-table.occ .tv-label{color:#fff}
+.tv-table.occ .tv-area{color:rgba(255,255,255,.82)}
 .tv-total{margin-top:auto;font-size:22px;font-weight:800}
 .tv-meta{font-size:12.5px;opacity:.85}
 `

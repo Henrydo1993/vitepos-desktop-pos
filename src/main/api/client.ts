@@ -44,6 +44,16 @@ export async function fetchOnlineOrders(s: Session, limit = 20) {
   return (res.data?.data?.rowdata ?? []) as any[]
 }
 
+// Floor plan from the opal-pos-connect plugin (public GET /tables — the same
+// list the QR/waiter ordering app uses). Different namespace to Vitepos, no auth.
+export async function fetchOpalTables(s: Session) {
+  const res = await s.http.get('/?rest_route=/opal-pos/v1/tables')
+  const rows = (Array.isArray(res.data) ? res.data : (res.data?.data ?? res.data?.tables ?? [])) as any[]
+  return rows
+    .map((t) => ({ label: stripHtml(t.label ?? t.name), area: stripHtml(t.area ?? ''), seats: Number(t.seats) || 0 }))
+    .filter((t) => t.label)
+}
+
 // POS orders currently live on the store (WooCommerce, _is_vitepos). Used to
 // reconcile local orders against the store (drop ones deleted on the store).
 export async function fetchOrderList(s: Session, limit = 100) {

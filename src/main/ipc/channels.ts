@@ -4,7 +4,7 @@ import type BetterSqlite3 from 'better-sqlite3'
 import type { Session } from '../api/auth'
 import { listMenu } from '../db/repo'
 import { syncCatalog } from '../sync/catalog'
-import { fetchVariations, searchCustomers, createCustomer, fetchReceiptConfig } from '../api/client'
+import { fetchVariations, searchCustomers, createCustomer, fetchReceiptConfig, fetchOpalTables } from '../api/client'
 import { pushPending, reconcileDeletedOrders } from '../sync/orders'
 import { pollOnline } from '../sync/online'
 import { getSettings, saveSettings, seedPrintersFromSettings, type Settings } from '../config'
@@ -37,6 +37,35 @@ const outletOf = (db: BetterSqlite3.Database) => {
 function printersOf(db: BetterSqlite3.Database): Record<string, PrinterCfg> {
   const rows = db.prepare('SELECT station,type,address FROM printers').all() as PrinterCfg[]
   return Object.fromEntries(rows.map((p) => [p.station, p]))
+}
+
+// Cached table floor from the opal-pos-connect plugin (public GET /tables) — the
+// same list the ordering app uses, so WordPress is one source of truth. Falls
+// back to the local table_count when never fetched / offline with no cache.
+interface CachedTable {
+  label: string
+  area: string
+  seats: number
+}
+function getCachedTables(db: BetterSqlite3.Database): CachedTable[] {
+  const row = db.prepare("SELECT value FROM meta WHERE key='opal_tables'").get() as { value?: string } | undefined
+  if (row?.value) {
+    try {
+      return JSON.parse(row.value) as CachedTable[]
+    } catch {
+      /* fall through */
+    }
+  }
+  return []
+}
+async function cacheOpalTables(db: BetterSqlite3.Database, s: Session) {
+  try {
+    const tbls = await fetchOpalTables(s)
+    if (tbls.length)
+      db.prepare("INSERT INTO meta (key,value) VALUES ('opal_tables',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(tbls))
+  } catch {
+    /* offline — keep last cached floor */
+  }
 }
 
 // Cached Vitepos receipt/invoice config (fetched from /basic/settings on sync).
@@ -139,9 +168,11 @@ function printReceiptAndTickets(
 }
 
 export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, rebuildSession: () => void) {
+  void cacheOpalTables(db, sessionRef.current) // pull the WordPress floor once on startup
   ipcMain.handle('catalog:sync', async () => {
     const r = await syncCatalog(db, sessionRef.current)
     await cacheReceiptCfg(db, sessionRef.current)
+    await cacheOpalTables(db, sessionRef.current)
     return r
   })
   ipcMain.handle('menu:list', () => listMenu(db))
@@ -163,6 +194,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
       /* offline — keep cached catalog */
     }
     await cacheReceiptCfg(db, sessionRef.current)
+    await cacheOpalTables(db, sessionRef.current)
     const push = await pushPending(db, sessionRef.current, outlet, counter).catch(() => ({ pending: 0, pushed: 0 }))
     const recon = await reconcileDeletedOrders(db, sessionRef.current).catch(() => ({ removed: 0 }))
     try {
@@ -274,7 +306,6 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
 
   // --- Restaurant: tables + open tabs (unpaid, fired to kitchen) ---
   ipcMain.handle('tables:list', () => {
-    const count = Number(getSettings(db).table_count) || 12
     const opens = db.prepare('SELECT id,table_label,lines,updated_at FROM open_orders').all() as {
       id: number
       table_label: string
@@ -296,10 +327,12 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
         updatedAt: o.updated_at,
       }
     }
-    return Array.from({ length: count }, (_, i) => {
-      const label = `Table ${i + 1}`
-      return { label, open: byTable[label] ?? null }
-    })
+    // Prefer the WordPress floor (opal-pos-connect); fall back to local table_count.
+    const cached = getCachedTables(db)
+    const floor: { label: string; area?: string; seats?: number }[] = cached.length
+      ? cached.map((t) => ({ label: t.label, area: t.area || undefined, seats: t.seats || undefined }))
+      : Array.from({ length: Number(getSettings(db).table_count) || 12 }, (_, i) => ({ label: `Table ${i + 1}` }))
+    return floor.map((t) => ({ ...t, open: byTable[t.label] ?? null }))
   })
   ipcMain.handle('openorder:get', (_e, id: number) => {
     const o = db.prepare('SELECT * FROM open_orders WHERE id=?').get(id) as
