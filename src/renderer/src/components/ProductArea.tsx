@@ -28,6 +28,7 @@ export function ProductArea() {
     setSyncing(true)
     try {
       const r = await window.pos.syncRefresh()
+      window.dispatchEvent(new Event('pos:synced'))
       setItems(await window.pos.menu())
       const bits = [`${r.products} products`]
       if (r.pushed) bits.push(`${r.pushed} sent`)

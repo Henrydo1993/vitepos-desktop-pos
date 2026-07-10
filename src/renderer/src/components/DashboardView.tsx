@@ -26,7 +26,11 @@ export function DashboardView() {
     }
     load()
     const t = setInterval(load, 30000)
-    return () => clearInterval(t)
+    window.addEventListener('pos:synced', load)
+    return () => {
+      clearInterval(t)
+      window.removeEventListener('pos:synced', load)
+    }
   }, [])
 
   const today = new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
