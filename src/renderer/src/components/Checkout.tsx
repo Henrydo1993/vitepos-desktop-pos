@@ -33,8 +33,11 @@ export function Checkout({ onClose }: { onClose: () => void }) {
   }, [lines, discount])
 
   if (!totals) return null
-  const total = totals.total + fee
+  const round5 = (n: number) => (Math.round(n / 0.05) * 5) / 100 // AU cash rounds to the nearest 5c
   const isCash = method === 'cash'
+  const rawTotal = totals.total + fee
+  const total = isCash ? round5(rawTotal) : rawTotal
+  const rounding = Math.round((total - rawTotal) * 100) / 100
   const amt = Number(amtStr) || 0
   const paid = isCash ? amt : total
   const ret = Math.max(0, paid - total)
@@ -81,6 +84,9 @@ export function Checkout({ onClose }: { onClose: () => void }) {
 
       <div className="co-body">
         <div className="co-total">${total.toFixed(2)}</div>
+        {isCash && rounding !== 0 && (
+          <div className="co-round">Rounded to nearest 5¢ ({rounding > 0 ? '+' : ''}${rounding.toFixed(2)})</div>
+        )}
 
         <div className="co-methods">
           {METHODS.map((m) => (
@@ -139,7 +145,8 @@ const CO_CSS = `
 .co-back{background:var(--vt-main,#1e3a8a);color:#fff;border:none;border-radius:9px;padding:9px 14px;font-size:14px;font-weight:700;cursor:pointer}
 .co-title{font-size:18px;font-weight:800;color:#0f172a}
 .co-body{flex:1;overflow:auto;padding:18px 22px;max-width:840px;width:100%;margin:0 auto}
-.co-total{text-align:center;font-size:52px;font-weight:800;color:#0f172a;margin:6px 0 20px;font-variant-numeric:tabular-nums}
+.co-total{text-align:center;font-size:52px;font-weight:800;color:#0f172a;margin:6px 0 16px;font-variant-numeric:tabular-nums}
+.co-round{text-align:center;font-size:13px;color:#64748b;margin:-10px 0 14px}
 .co-methods{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
 .co-method{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 8px;border:1px solid #e5e8ee;border-radius:14px;background:#f4f7fb;font-size:13px;font-weight:700;color:#334155;cursor:pointer}
 .co-method .co-mi{font-size:26px}

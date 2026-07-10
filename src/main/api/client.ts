@@ -92,6 +92,7 @@ export async function fetchOpalOrders(s: Session) {
           price: Number(li.price ?? li.total ?? 0),
           station: 'kitchen',
           modifiers: [] as string[],
+          productId: Number(li.product_id ?? li.variation_id ?? 0), // for station (category) routing on the POS
         })),
       }
     })

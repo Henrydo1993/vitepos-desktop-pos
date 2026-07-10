@@ -9,7 +9,7 @@ import { pushPending, reconcileDeletedOrders } from '../sync/orders'
 import { pollOnline, pollOpalOrders, type OnlineOrder } from '../sync/online'
 import { getSettings, saveSettings, seedPrintersFromSettings, type Settings } from '../config'
 import { priceOrder, type PriceLine, type Discount } from '../order/pricing'
-import { routeByStation, type TicketItem } from '../print/router'
+import { routeByStation, stationForCategory, stationLabel, type TicketItem } from '../print/router'
 import { buildKitchenTicket, DEFAULT_RECEIPT, type ReceiptConfig, type DayReport } from '../print/tickets'
 import { printWithRetry, printReceiptWithRetry, printReportWithRetry, printKitchenWithRetry, type PrinterCfg } from '../print/engine'
 
@@ -137,6 +137,17 @@ function computeShiftSummary(db: BetterSqlite3.Database, shift: ShiftRow) {
   return { orders: sum.orders, gross: sum.gross, byMethod, cashSales: cash.c, cashExpected: (shift.opening_float || 0) + cash.c }
 }
 
+// Ordering-app orders arrive from WooCommerce without a station, so assign each item one
+// (front-of-house vs kitchen) from its product's category for split prepare printing.
+function assignStations(db: BetterSqlite3.Database, items: (TicketItem & { price: number })[]) {
+  const get = db.prepare('SELECT category FROM products WHERE id=?')
+  return items.map((it) => {
+    const pid = (it as { productId?: number }).productId
+    const cat = pid ? (get.get(pid) as { category?: string } | undefined)?.category : undefined
+    return { ...it, station: stationForCategory(cat) }
+  })
+}
+
 // Merge an incoming ordering-app order into the table's open tab, so the floor shows the
 // table TAKEN and every order for it (QR scan, waiter, counter) accumulates into ONE bill —
 // no duplicate tabs. Items are marked sent (already printed to the kitchen).
@@ -183,9 +194,9 @@ function printReceiptAndTickets(
   items: PricedItem[],
   totals: { subtotal: number; discount: number; tax: number; total: number; tender: number; change: number } | null,
   meta: { orderType?: string; note?: string; customerName?: string; staffName?: string; table?: string } = {},
+  fireTickets = true,
 ) {
   const byStation = printersOf(db)
-  const receiptPrinted = !!(totals && byStation.counter)
   if (totals && byStation.counter) {
     void printReceiptWithRetry(
       byStation.counter,
@@ -194,16 +205,12 @@ function printReceiptAndTickets(
       { kickDrawer: true },
     )
   }
-  const counterFallback: TicketItem[] = []
+  if (!fireTickets) return
+  // One prepare ticket per station — front-of-house vs kitchen — each to its own printer
+  // if configured, otherwise its own separate ticket on the counter.
   for (const [station, list] of Object.entries(routeByStation(items))) {
-    const cfg = byStation[station]
-    if (cfg) void printKitchenWithRetry(cfg, buildKitchenTicket({ token, station: station.toUpperCase(), table: meta.table, items: list, orderType: meta.orderType, note: meta.note }))
-    else counterFallback.push(...list)
-  }
-  // No dedicated kitchen/bar printer → print one prepare list on the counter, unless a
-  // pay-first receipt already went there (it already lists the items).
-  if (counterFallback.length && byStation.counter && !receiptPrinted) {
-    void printKitchenWithRetry(byStation.counter, buildKitchenTicket({ token, station: 'PREPARE', table: meta.table, items: counterFallback, orderType: meta.orderType, note: meta.note }))
+    const cfg = byStation[station] ?? byStation.counter
+    if (cfg) void printKitchenWithRetry(cfg, buildKitchenTicket({ token, station: stationLabel(station), table: meta.table, items: list, orderType: meta.orderType, note: meta.note }))
   }
 }
 
@@ -251,8 +258,9 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     try {
       const opal = await pollOpalOrders(db, sessionRef.current)
       for (const o of opal) {
-        mergeOpalTab(db, o)
-        printReceiptAndTickets(db, o.token, o.items, null, { table: o.table, note: o.note, orderType: 'table' })
+        const staged = assignStations(db, o.items)
+        mergeOpalTab(db, { ...o, items: staged })
+        printReceiptAndTickets(db, o.token, staged, null, { table: o.table, note: o.note, orderType: 'table' })
       }
     } catch {
       /* offline */
@@ -408,22 +416,15 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     const id = saveOpenOrder(db, { ...p, lines: lines.map((l) => ({ ...l, sent: true })) })
     if (unsent.length) {
       const byStation = printersOf(db)
-      const counterFallback: TicketItem[] = []
+      // One prepare ticket per station — front-of-house vs kitchen — each to its own
+      // printer if configured, otherwise its own separate ticket on the counter.
       for (const [station, list] of Object.entries(routeByStation(unsent))) {
-        const cfg = byStation[station]
+        const cfg = byStation[station] ?? byStation.counter
         if (cfg)
           void printKitchenWithRetry(
             cfg,
-            buildKitchenTicket({ token: id, station: station.toUpperCase(), table: p.tableLabel ?? undefined, items: list, orderType: 'table', note: p.note ?? undefined }),
+            buildKitchenTicket({ token: id, station: stationLabel(station), table: p.tableLabel ?? undefined, items: list, orderType: 'table', note: p.note ?? undefined }),
           )
-        else counterFallback.push(...list)
-      }
-      // Single-printer shop (counter only): print the prepare list on the counter.
-      if (counterFallback.length && byStation.counter) {
-        void printKitchenWithRetry(
-          byStation.counter,
-          buildKitchenTicket({ token: id, station: 'PREPARE', table: p.tableLabel ?? undefined, items: counterFallback, orderType: 'table', note: p.note ?? undefined }),
-        )
       }
     }
     return { id, printed: unsent.length }
@@ -546,12 +547,14 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     for (const it of payload.items) {
       insItem.run(oid, it.product_id, it.name, it.qty, it.price, it.station, JSON.stringify(it.modifiers ?? []))
     }
-    printReceiptAndTickets(db, token, payload.items, payload.totals, {
-      orderType: payload.orderType,
-      note: payload.note,
-      customerName: payload.customerName,
-      staffName: payload.staffName,
-    })
+    printReceiptAndTickets(
+      db,
+      token,
+      payload.items,
+      payload.totals,
+      { orderType: payload.orderType, note: payload.note, customerName: payload.customerName, staffName: payload.staffName },
+      !payload.openOrderId, // a dine-in tab was already fired via Send to Kitchen — don't reprint the prep tickets
+    )
     if (payload.openOrderId) db.prepare('DELETE FROM open_orders WHERE id=?').run(payload.openOrderId)
     return { token, orderId: oid }
   })
@@ -622,8 +625,9 @@ export function startSync(db: BetterSqlite3.Database, sessionRef: SessionRef, no
     try {
       const opal = await pollOpalOrders(db, sessionRef.current)
       for (const o of opal) {
-        mergeOpalTab(db, o)
-        printReceiptAndTickets(db, o.token, o.items, null, { table: o.table, note: o.note, orderType: 'table' })
+        const staged = assignStations(db, o.items)
+        mergeOpalTab(db, { ...o, items: staged })
+        printReceiptAndTickets(db, o.token, staged, null, { table: o.table, note: o.note, orderType: 'table' })
         notify('online:new', { token: o.token, total: o.total, items: o.items.length })
       }
     } catch {

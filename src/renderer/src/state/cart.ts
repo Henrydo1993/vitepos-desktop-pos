@@ -8,10 +8,10 @@ export interface Customer {
   name: string
 }
 
-const stationOf = (m: MenuItem): string =>
-  /drink|beverage|coffee|tea|juice|soda|bar|smoothie|latte|shake|water|che\b/i.test(`${m.category ?? ''} ${m.name}`)
-    ? 'bar'
-    : 'kitchen'
+// Front-of-house categories (coffee / juice / desserts) route to their own prepare paper;
+// the rest go to the kitchen. Keep in sync with print/router.ts stationForCategory().
+const FOH_CATEGORIES = new Set(['coffee house', 'fresh pressed juices', 'sweet endings'])
+const stationOf = (m: MenuItem): string => (FOH_CATEGORIES.has((m.category ?? '').trim().toLowerCase()) ? 'foh' : 'kitchen')
 
 interface CartState {
   lines: CartLine[]
