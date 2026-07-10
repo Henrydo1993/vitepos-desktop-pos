@@ -51,6 +51,7 @@ const ALTERS: string[] = [
   'ALTER TABLE orders ADD COLUMN customer_id INTEGER',
   'ALTER TABLE orders ADD COLUMN customer_name TEXT',
   'ALTER TABLE orders ADD COLUMN staff_name TEXT',
+  'ALTER TABLE orders ADD COLUMN push_tries INTEGER DEFAULT 0',
 ]
 
 export function migrate(db: Database.Database) {

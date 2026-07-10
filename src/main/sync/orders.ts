@@ -52,10 +52,18 @@ export function buildOfflinePayload(order: OrderRow, items: ItemRow[], outletId:
 }
 
 export async function pushPending(db: Database.Database, s: Session, outletId: string, counterId: string) {
-  const pending = db.prepare(`SELECT * FROM orders WHERE synced=0 ORDER BY id LIMIT 20`).all() as OrderRow[]
+  // Cap retries: a persistently-failing order must NOT be re-pushed forever. Each failed
+  // push can spawn a bare stray order on the store, so an uncapped loop floods it with $0s.
+  const pending = db.prepare(`SELECT * FROM orders WHERE synced=0 AND COALESCE(push_tries,0) < 3 ORDER BY id LIMIT 20`).all() as OrderRow[]
   let pushed = 0
   for (const o of pending) {
     const items = db.prepare(`SELECT product_id,name,qty,price FROM order_items WHERE order_id=?`).all(o.id) as ItemRow[]
+    if (!items.length) {
+      // Never push an empty order — that is exactly what spawned the $0-order flood.
+      db.prepare(`UPDATE orders SET push_tries=3, sync_error='empty order — not pushed' WHERE id=?`).run(o.id)
+      continue
+    }
+    db.prepare(`UPDATE orders SET push_tries=COALESCE(push_tries,0)+1 WHERE id=?`).run(o.id) // count the attempt before it runs
     try {
       const res = await syncOfflineOrder(s, buildOfflinePayload(o, items, outletId, counterId))
       if (res.ok) {
