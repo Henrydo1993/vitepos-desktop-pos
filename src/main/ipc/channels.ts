@@ -4,7 +4,7 @@ import type BetterSqlite3 from 'better-sqlite3'
 import type { Session } from '../api/auth'
 import { listMenu } from '../db/repo'
 import { syncCatalog } from '../sync/catalog'
-import { fetchVariations, searchCustomers, createCustomer, fetchReceiptConfig, fetchOpalTables, reportPosIp } from '../api/client'
+import { fetchVariations, searchCustomers, createCustomer, fetchReceiptConfig, fetchOpalTables } from '../api/client'
 import { pushPending, reconcileDeletedOrders } from '../sync/orders'
 import { pollOnline, pollOpalOrders, type OnlineOrder } from '../sync/online'
 import { getSettings, saveSettings, seedPrintersFromSettings, type Settings } from '../config'
@@ -216,7 +216,6 @@ function printReceiptAndTickets(
 
 export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, rebuildSession: () => void) {
   void cacheOpalTables(db, sessionRef.current) // pull the WordPress floor once on startup
-  void reportPosIp(sessionRef.current) // register our IP for the customer Wi-Fi gate
   ipcMain.handle('catalog:sync', async () => {
     const r = await syncCatalog(db, sessionRef.current)
     await cacheReceiptCfg(db, sessionRef.current)
@@ -246,7 +245,6 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     }
     await cacheReceiptCfg(db, sessionRef.current)
     await cacheOpalTables(db, sessionRef.current)
-    void reportPosIp(sessionRef.current)
     const push = await pushPending(db, sessionRef.current, outlet, counter).catch(() => ({ pending: 0, pushed: 0 }))
     const recon = await reconcileDeletedOrders(db, sessionRef.current).catch(() => ({ removed: 0 }))
     try {
@@ -600,19 +598,10 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
 
 // Background loop: push local orders to WooCommerce and pull website orders to the kitchen.
 export function startSync(db: BetterSqlite3.Database, sessionRef: SessionRef, notify: Notify) {
-  let lastIpReport = 0
   const tick = async () => {
-    if (Date.now() - lastIpReport > 180000) {
-      lastIpReport = Date.now()
-      void reportPosIp(sessionRef.current)
-    }
-    try {
-      const { outlet, counter } = outletOf(db)
-      const res = await pushPending(db, sessionRef.current, outlet, counter)
-      if (res.pushed) notify('sync:progress', res)
-    } catch {
-      /* offline — retry next tick */
-    }
+    // NOTE: auto-push of local sales is intentionally NOT in the background tick — a stuck
+    // order here spawned a flood of blank $0 orders on the store. Pushing happens only on
+    // the manual ↻ Sync now (which is capped + skips empty orders).
     try {
       const fresh = await pollOnline(db, sessionRef.current)
       for (const o of fresh) {

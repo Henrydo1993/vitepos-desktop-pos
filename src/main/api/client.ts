@@ -54,16 +54,6 @@ export async function fetchOpalTables(s: Session) {
     .filter((t) => t.label)
 }
 
-// Tell the ordering plugin the restaurant's current public IP (this POS is on-premise),
-// so the customer Wi-Fi gate self-configures and self-heals if the ISP IP changes.
-// Authenticated via the POS app-password (the plugin requires manage_woocommerce).
-export async function reportPosIp(s: Session) {
-  try {
-    await s.http.post('/?rest_route=/opal-pos/v1/register-ip', {})
-  } catch {
-    /* best-effort — offline is fine */
-  }
-}
 
 // Ordering-app orders straight from WooCommerce (status active + _opc_source meta).
 // Vitepos online-list relays these foreign orders WITHOUT line items, so the POS could
