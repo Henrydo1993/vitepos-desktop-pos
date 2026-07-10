@@ -18,7 +18,7 @@ const OTYPES: { k: OrderType; label: string }[] = [
 ]
 
 export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: () => void }) {
-  const { lines, held, orderType, setOrderType, discount, note, setNote, customer, setCustomer, fee, tableLabel, openOrderId, setQty, changeQty, removeLine, clear, hold } =
+  const { lines, held, orderType, setOrderType, discount, note, setNote, customer, setCustomer, fee, tableLabel, openOrderId, setTable, setQty, changeQty, removeLine, clear, hold } =
     useCart()
   const staff = useAuth((s) => s.staff)
   const [now, setNow] = useState(() => new Date())
@@ -29,9 +29,17 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
     clear()
     onTables()
   }
-  // Persist edits (remove / qty change) to a saved table tab so they stick.
+  // Persist edits (remove / qty change) to a saved table tab so they stick. If the last
+  // item is gone the tab is empty — delete it and free the table, instead of leaving an
+  // empty tab that still shows the table occupied (green) on the floor.
   const syncTab = (next: typeof lines) => {
-    if (openOrderId) void window.pos.openOrderSave({ id: openOrderId, tableLabel: tableLabel ?? undefined, note, staffName: staff?.name, lines: next })
+    if (!openOrderId) return
+    if (next.length === 0) {
+      void window.pos.openOrderClose(openOrderId)
+      setTable(tableLabel, null) // table still selected, but no saved tab now
+    } else {
+      void window.pos.openOrderSave({ id: openOrderId, tableLabel: tableLabel ?? undefined, note, staffName: staff?.name, lines: next })
+    }
   }
   const chQty = (i: number, d: number) => {
     const next = lines.map((l, j) => (j === i ? { ...l, qty: Math.max(0, l.qty + d) } : l)).filter((l) => l.qty > 0)
