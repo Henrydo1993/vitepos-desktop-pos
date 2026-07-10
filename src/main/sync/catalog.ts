@@ -63,14 +63,34 @@ export async function syncCatalog(db: Database.Database, s: Session) {
 
   let page = 1
   let total = 0
+  const seen = new Set<number>()
   for (;;) {
     const rows = toArray(await fetchProducts(s, page, 100))
     if (!rows.length) break
-    const ins = db.transaction((rs: any[]) => rs.forEach((p) => upsertProduct(db, normalizeProduct(p))))
+    const ins = db.transaction((rs: any[]) =>
+      rs.forEach((p) => {
+        const np = normalizeProduct(p)
+        seen.add(np.id)
+        upsertProduct(db, np)
+      }),
+    )
     ins(rows)
     total += rows.length
     if (rows.length < 100) break
     page++
+  }
+
+  // Remove products deleted on the store. Only when a real product list came back,
+  // so a failed/empty fetch never wipes the local catalog.
+  let removed = 0
+  if (total > 0) {
+    const localIds = (db.prepare('SELECT id FROM products').all() as { id: number }[]).map((r) => r.id)
+    const stale = localIds.filter((id) => !seen.has(id))
+    if (stale.length) {
+      const del = db.prepare('DELETE FROM products WHERE id=?')
+      db.transaction((ids: number[]) => ids.forEach((id) => del.run(id)))(stale)
+      removed = stale.length
+    }
   }
 
   try {
@@ -92,5 +112,5 @@ export async function syncCatalog(db: Database.Database, s: Session) {
   db.prepare(`INSERT INTO meta (key,value) VALUES ('last_sync',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run(
     new Date().toISOString(),
   )
-  return { products: total, categories: categoryCount }
+  return { products: total, categories: categoryCount, removed }
 }

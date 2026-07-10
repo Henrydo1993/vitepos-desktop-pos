@@ -228,8 +228,11 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
   ipcMain.handle('sync:refresh', async () => {
     const { outlet, counter } = outletOf(db)
     let products = 0
+    let productsRemoved = 0
     try {
-      products = (await syncCatalog(db, sessionRef.current)).products
+      const cat = await syncCatalog(db, sessionRef.current)
+      products = cat.products
+      productsRemoved = cat.removed
     } catch {
       /* offline — keep cached catalog */
     }
@@ -252,7 +255,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     } catch {
       /* offline */
     }
-    return { products, pushed: push.pushed, removed: recon.removed }
+    return { products, productsRemoved, pushed: push.pushed, removed: recon.removed }
   })
   ipcMain.handle('customer:search', (_e, q: string) => searchCustomers(sessionRef.current, q))
   ipcMain.handle('customer:create', (_e, data: Record<string, unknown>) => createCustomer(sessionRef.current, data))

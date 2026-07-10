@@ -31,7 +31,8 @@ export function ProductArea() {
       setItems(await window.pos.menu())
       const bits = [`${r.products} products`]
       if (r.pushed) bits.push(`${r.pushed} sent`)
-      if (r.removed) bits.push(`${r.removed} removed`)
+      if (r.productsRemoved) bits.push(`${r.productsRemoved} deleted`)
+      if (r.removed) bits.push(`${r.removed} orders cleared`)
       setMsg('Synced · ' + bits.join(' · '))
     } catch {
       setMsg('Sync failed — check connection')
