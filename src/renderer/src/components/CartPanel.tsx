@@ -18,7 +18,7 @@ const OTYPES: { k: OrderType; label: string }[] = [
 ]
 
 export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: () => void }) {
-  const { lines, held, orderType, setOrderType, discount, note, setNote, customer, setCustomer, fee, tableLabel, openOrderId, setQty, changeQty, clear, hold } =
+  const { lines, held, orderType, setOrderType, discount, note, setNote, customer, setCustomer, fee, tableLabel, openOrderId, setQty, changeQty, removeLine, clear, hold } =
     useCart()
   const staff = useAuth((s) => s.staff)
   const [now, setNow] = useState(() => new Date())
@@ -28,6 +28,37 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
     await window.pos.openOrderSend({ id: openOrderId ?? undefined, tableLabel: tableLabel ?? undefined, note, staffName: staff?.name, lines })
     clear()
     onTables()
+  }
+  // Persist edits (remove / qty change) to a saved table tab so they stick.
+  const syncTab = (next: typeof lines) => {
+    if (openOrderId) void window.pos.openOrderSave({ id: openOrderId, tableLabel: tableLabel ?? undefined, note, staffName: staff?.name, lines: next })
+  }
+  const chQty = (i: number, d: number) => {
+    const next = lines.map((l, j) => (j === i ? { ...l, qty: Math.max(0, l.qty + d) } : l)).filter((l) => l.qty > 0)
+    changeQty(i, d)
+    syncTab(next)
+  }
+  const stQty = (i: number, v: number) => {
+    const q = Math.max(1, Math.floor(v || 1))
+    setQty(i, q)
+    syncTab(lines.map((l, j) => (j === i ? { ...l, qty: q } : l)))
+  }
+  const removeAt = (i: number) => {
+    const l = lines[i]
+    if (l?.sent && !window.confirm(`"${l.name}" was already sent to the kitchen. Remove it from the order?`)) return
+    const next = lines.filter((_, j) => j !== i)
+    removeLine(i)
+    syncTab(next)
+  }
+  const clearOrCancel = async () => {
+    if (tableLabel) {
+      if (!window.confirm(`Cancel ${tableLabel}'s order and free the table?`)) return
+      if (openOrderId) await window.pos.openOrderClose(openOrderId)
+      clear()
+      onTables()
+      return
+    }
+    clear()
   }
   const [showDisc, setShowDisc] = useState(false)
   const [showCust, setShowCust] = useState(false)
@@ -69,7 +100,7 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
 
       <div className="cart-top">
         <span className="num">{tableLabel ? `🍽 ${tableLabel}` : `# ${lines.length ? 1 : 0}`}</span>
-        <button className="icon-btn danger" onClick={clear} title="Clear order" disabled={!lines.length}>
+        <button className="icon-btn danger" onClick={clearOrCancel} title={tableLabel ? 'Cancel table' : 'Clear order'} disabled={!lines.length}>
           ✕
         </button>
         <span className="when">
@@ -92,7 +123,7 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
               <div className="cr-name">{l.name}</div>
               <div className="cr-qty">
                 <label>Qty</label>
-                <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => changeQty(i, -1)}>
+                <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => chQty(i, -1)}>
                   −
                 </button>
                 <input
@@ -100,14 +131,18 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
                   type="number"
                   min={1}
                   value={l.qty}
-                  onChange={(e) => setQty(i, Number(e.target.value))}
+                  onChange={(e) => stQty(i, Number(e.target.value))}
                 />
-                <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => changeQty(i, +1)}>
+                <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => chQty(i, +1)}>
                   ＋
                 </button>
+                {l.sent && <span className="cr-sent" title="Already sent to the kitchen">✓ sent</span>}
               </div>
             </div>
             <div className="cr-amt">${(l.price * l.qty).toFixed(2)}</div>
+            <button className="icon-btn danger" style={{ width: 28, height: 28, flex: '0 0 auto' }} onClick={() => removeAt(i)} title="Remove item">
+              🗑
+            </button>
           </div>
         ))}
       </div>

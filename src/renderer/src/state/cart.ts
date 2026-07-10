@@ -26,6 +26,7 @@ interface CartState {
   add: (m: MenuItem) => void
   setQty: (i: number, qty: number) => void
   changeQty: (i: number, d: number) => void
+  removeLine: (i: number) => void
   clear: () => void
   hold: () => void
   recall: (i: number) => void
@@ -90,6 +91,7 @@ export const useCart = create<CartState>((set) => ({
       lines[i] = { ...lines[i], qty: Math.max(0, lines[i].qty + d) }
       return { lines: lines.filter((l) => l.qty > 0) }
     }),
+  removeLine: (i) => set((s) => ({ lines: s.lines.filter((_, j) => j !== i) })),
   clear: () => set({ ...RESET }),
   hold: () => set((s) => (s.lines.length ? { held: [...s.held, s.lines], ...RESET } : s)),
   recall: (i) => set((s) => ({ lines: s.held[i], held: s.held.filter((_, j) => j !== i) })),

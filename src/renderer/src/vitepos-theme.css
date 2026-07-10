@@ -63,6 +63,7 @@ button { font-family: inherit; }
 .qtybox { width: 58px; height: 30px; border: 1px solid var(--vt-border); border-radius: 8px; text-align: center; font-size: 14px; color: var(--vt-ink); }
 .qtybox:focus { outline: none; border-color: var(--vt-main); }
 .cart-row .cr-amt { font-weight: 700; color: var(--vt-ink); white-space: nowrap; }
+.cr-sent { margin-left: 6px; font-size: 10px; font-weight: 700; color: #0a8a3f; background: #e7f6ec; padding: 1px 6px; border-radius: 8px; }
 .cart-empty { color: var(--vt-text-2); text-align: center; margin-top: 40px; }
 
 /* Cart footer (blue) */
