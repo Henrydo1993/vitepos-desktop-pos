@@ -43,6 +43,12 @@ export function ProductArea() {
   }
 
   useEffect(() => {
+    const onSynced = () => window.pos.menu().then(setItems)
+    window.addEventListener('pos:synced', onSynced)
+    return () => window.removeEventListener('pos:synced', onSynced)
+  }, [])
+
+  useEffect(() => {
     let alive = true
     ;(async () => {
       const cached = await window.pos.menu()

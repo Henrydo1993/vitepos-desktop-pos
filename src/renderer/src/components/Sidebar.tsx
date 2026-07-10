@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Staff } from '../state/auth'
 
 export type View = 'pos' | 'tables' | 'dashboard' | 'orders'
@@ -24,8 +25,29 @@ export function Sidebar({
   staff: Staff | null
   version?: string
 }) {
+  const [syncing, setSyncing] = useState(false)
+  const [msg, setMsg] = useState('')
+  const doSync = async () => {
+    if (syncing) return
+    setSyncing(true)
+    try {
+      const r = await window.pos.syncRefresh()
+      window.dispatchEvent(new Event('pos:synced'))
+      const bits = [`${r.products} products`]
+      if (r.pushed) bits.push(`${r.pushed} sent`)
+      if (r.productsRemoved) bits.push(`${r.productsRemoved} deleted`)
+      if (r.removed) bits.push(`${r.removed} orders cleared`)
+      setMsg('Synced · ' + bits.join(' · '))
+    } catch {
+      setMsg('Sync failed — check connection')
+    } finally {
+      setSyncing(false)
+      setTimeout(() => setMsg(''), 4000)
+    }
+  }
   return (
     <div className="nav">
+      {msg && <div className="sync-toast">{msg}</div>}
       <div className="logo">OPAL</div>
       {NAV.map((it) => (
         <button key={it.key} className={`nav-item${view === it.key ? ' active' : ''}`} onClick={() => onNav(it.key)}>
@@ -35,6 +57,12 @@ export function Sidebar({
       ))}
 
       <div style={{ marginTop: 'auto' }} />
+      <button className="nav-item" onClick={doSync} disabled={syncing} title="Pull products, tables & orders from the store now">
+        <span className="ico" style={syncing ? { display: 'inline-block', animation: 'vspin .9s linear infinite' } : undefined}>
+          🔄
+        </span>
+        <span>{syncing ? 'Syncing…' : 'Sync'}</span>
+      </button>
       {staff && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '10px 4px', color: '#fff' }} title={staff.role}>
           <div
