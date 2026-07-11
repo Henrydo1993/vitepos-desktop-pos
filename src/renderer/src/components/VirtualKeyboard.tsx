@@ -74,6 +74,22 @@ export function VirtualKeyboard() {
     }
   }, [])
 
+  // Chromium fires NO focusout when a focused input is removed from the DOM
+  // (e.g. tapping Pay unmounts the product search). Without this, the keyboard
+  // would stay stuck open over the next screen — covering the Checkout numpad.
+  // Watch the DOM while open and dismiss once our target is gone.
+  useEffect(() => {
+    if (!visible) return
+    const obs = new MutationObserver(() => {
+      if (target.current && !target.current.isConnected) {
+        setVisible(false)
+        target.current = null
+      }
+    })
+    obs.observe(document.body, { childList: true, subtree: true })
+    return () => obs.disconnect()
+  }, [visible])
+
   if (!visible) return null
 
   const tap = (k: string) => {
