@@ -164,11 +164,21 @@ its orders; [ ] no sale is invisible to reporting.
 
 ---
 
-## Backlog — flagged in the inventory, not yet reviewed
+## Backlog — reviewed
 
-- POS sales don't auto-reach WooCommerce (auto-push off since v1.0.28) → report/WC divergence.
-- `reconcileDeletedOrders` could drop legitimate orders inside its window.
-- Auto-update `autoInstallOnAppQuit` in kiosk with no rollback.
-- Plugin REST endpoints public (`__return_true`) incl. `/register-ip` — poisonable Wi-Fi gate.
-- Cash rounding vs counted-cash reconciliation at shift close.
-- Electron shell: `sandbox:false`, no CSP, no navigation guard.
+- **✅ Auto-push divergence** — re-enabled auto-push in the 15s tick. The old flood came from
+  re-pushing a stuck/empty order forever; `pushPending` now caps retries at 3 and skips empty
+  orders, so it can't recur. POS sales reach WooCommerce automatically again.
+- **✅ Plugin Wi-Fi/IP gate** — removed entirely (opal-pos-connect 1.3.0); it was half-wired
+  dead code. (`/register-ip` was already auth-gated, not poisonable — my earlier note was wrong.)
+- **✅ Electron shell hardening** — `sandbox: true` (preload is contextBridge-only), `webSecurity`,
+  a production **CSP** (`script-src 'self'`, images allow http(s) for WC photos), a `will-navigate`
+  guard, and `setWindowOpenHandler` deny. ⚠️ `sandbox:true` needs one real-device launch smoke.
+- **☑ `reconcileDeletedOrders` window** — reviewed: already guarded (only `synced=1` orders,
+  bails on shape mismatch `wc>0 && live=0`, reconciles only back to the oldest fetched when the
+  page is full) and now also excludes settled QR orders (#1). No change needed.
+- **☑ Rounding vs counted cash** — reviewed: the order stores the *rounded* total and the shift's
+  `cashExpected` sums those same rounded totals, so it reconciles with the drawer. No gap.
+- **☑ Auto-update `autoInstallOnAppQuit`** — reviewed: risk accepted with mitigation (update
+  errors are swallowed so a failed update can't crash the till; releases are hand-tagged and
+  smoke-tested before rollout). A full rollback mechanism is out of scope / disproportionate.

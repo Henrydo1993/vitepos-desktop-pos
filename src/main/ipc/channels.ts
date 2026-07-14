@@ -675,9 +675,16 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
 // Background loop: push local orders to WooCommerce and pull website orders to the kitchen.
 export function startSync(db: BetterSqlite3.Database, sessionRef: SessionRef, notify: Notify) {
   const tick = async () => {
-    // NOTE: auto-push of local sales is intentionally NOT in the background tick — a stuck
-    // order here spawned a flood of blank $0 orders on the store. Pushing happens only on
-    // the manual ↻ Sync now (which is capped + skips empty orders).
+    // Auto-push local sales to WooCommerce so reports don't drift. The earlier $0-order flood
+    // came from re-pushing a stuck/empty order every tick; pushPending now caps retries at 3
+    // and never pushes an empty order, so a bad order stops after 3 attempts instead of looping.
+    try {
+      const { outlet, counter } = outletOf(db)
+      await pushPending(db, sessionRef.current, outlet, counter)
+      await settlePendingOpal(db, sessionRef.current)
+    } catch {
+      /* offline — try again next tick */
+    }
     try {
       const fresh = await pollOnline(db, sessionRef.current)
       for (const o of fresh) {
