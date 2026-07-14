@@ -125,15 +125,18 @@ interface ShiftRow {
   status: string
 }
 function computeShiftSummary(db: BetterSqlite3.Database, shift: ShiftRow) {
-  // Open shift: everything since it opened. Closed shift: bounded to its close
-  // time, so a reprint reflects that day only — not orders taken afterwards.
+  // Attribute by shift_id (precise — no orders-after-close leaking in, none missed). Orders
+  // from before this feature have NULL shift_id, so fall back to the time window for those:
+  // open shift = since it opened; closed shift = bounded to its close time.
   const win = shift.closed_at ? 'created_at >= ? AND created_at < ?' : 'created_at >= ?'
-  const args: string[] = shift.closed_at ? [shift.opened_at, shift.closed_at] : [shift.opened_at]
-  const sum = db.prepare(`SELECT COUNT(*) orders, COALESCE(SUM(total),0) gross FROM orders WHERE voided=0 AND ${win}`).get(...args) as { orders: number; gross: number }
+  const windowArgs: (string | number)[] = shift.closed_at ? [shift.opened_at, shift.closed_at] : [shift.opened_at]
+  const cond = `(shift_id = ? OR (shift_id IS NULL AND ${win}))`
+  const args: (string | number)[] = [shift.id, ...windowArgs]
+  const sum = db.prepare(`SELECT COUNT(*) orders, COALESCE(SUM(total),0) gross FROM orders WHERE voided=0 AND ${cond}`).get(...args) as { orders: number; gross: number }
   const byMethod = db
-    .prepare(`SELECT payment_method method, COUNT(*) n, COALESCE(SUM(total),0) amt FROM orders WHERE voided=0 AND ${win} GROUP BY payment_method ORDER BY amt DESC`)
+    .prepare(`SELECT payment_method method, COUNT(*) n, COALESCE(SUM(total),0) amt FROM orders WHERE voided=0 AND ${cond} GROUP BY payment_method ORDER BY amt DESC`)
     .all(...args) as { method: string; n: number; amt: number }[]
-  const cash = db.prepare(`SELECT COALESCE(SUM(total),0) c FROM orders WHERE voided=0 AND payment_method='cash' AND ${win}`).get(...args) as { c: number }
+  const cash = db.prepare(`SELECT COALESCE(SUM(total),0) c FROM orders WHERE voided=0 AND payment_method='cash' AND ${cond}`).get(...args) as { c: number }
   return { orders: sum.orders, gross: sum.gross, byMethod, cashSales: cash.c, cashExpected: (shift.opening_float || 0) + cash.c }
 }
 
@@ -563,10 +566,12 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     const token = (
       db.prepare(`SELECT COALESCE(MAX(token),0)+1 t FROM orders WHERE date(created_at)=date('now')`).get() as { t: number }
     ).t
+    // Tie the sale to the open shift (0 = none open) so reports attribute it precisely.
+    const shiftId = (db.prepare("SELECT id FROM shifts WHERE status='open' ORDER BY id DESC LIMIT 1").get() as { id?: number } | undefined)?.id ?? 0
     const info = db
       .prepare(
-        `INSERT INTO orders (token,status,subtotal,tax,discount,total,tender,change,payment_method,order_type,note,customer_id,customer_name,staff_name,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO orders (token,status,subtotal,tax,discount,total,tender,change,payment_method,order_type,note,customer_id,customer_name,staff_name,shift_id,created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         token,
@@ -583,6 +588,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
         payload.customerId ?? null,
         payload.customerName ?? null,
         payload.staffName ?? null,
+        shiftId,
         new Date().toISOString(),
       )
     const oid = info.lastInsertRowid as number

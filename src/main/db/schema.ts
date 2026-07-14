@@ -57,6 +57,9 @@ const ALTERS: string[] = [
   'ALTER TABLE open_orders ADD COLUMN remote_ids TEXT',
   'ALTER TABLE orders ADD COLUMN opal_remote_ids TEXT',
   'ALTER TABLE orders ADD COLUMN opal_settled INTEGER DEFAULT 0',
+  // Shift attribution (#5): NULL = pre-migration (attributed by time window), 0 = rung with
+  // no shift open, >0 = the shift it belongs to.
+  'ALTER TABLE orders ADD COLUMN shift_id INTEGER',
 ]
 
 export function migrate(db: Database.Database) {

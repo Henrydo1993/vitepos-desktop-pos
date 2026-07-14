@@ -139,7 +139,13 @@ reversible by lookup.
 
 ---
 
-## #5 🟡 MEDIUM — Shift ↔ order attribution is timestamp-only
+## #5 ✅ DONE — Shift ↔ order attribution is timestamp-only
+
+**Fixed:** `orders.shift_id` stamped on `order:commit` (0 = no shift open, NULL = pre-migration).
+`computeShiftSummary` attributes by `shift_id` with a time-window fallback for legacy NULL
+orders — so no order-after-close leaks in and none is missed. SQL verified (this shift +
+legacy-in-window count; after-close + no-shift excluded).
+
 
 **Symptom:** `computeShiftSummary` attributes orders by **time window**
 (`created_at >= opened_at [AND < closed_at]`) — there is **no `shift_id` on orders.**
