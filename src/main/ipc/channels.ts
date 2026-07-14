@@ -674,6 +674,14 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     db.prepare(`UPDATE orders SET voided=1, void_reason=?, status='cancelled', synced=0 WHERE id=?`).run(reason, orderId)
     return { ok: true }
   })
+
+  ipcMain.handle('order:setPayment', (_e, orderId: number, method: string) => {
+    requireRole(MANAGER) // correcting a payment record reclassifies cash vs card — manager/admin only
+    if (!['cash', 'card', 'bank', 'other'].includes(method)) throw new Error('Invalid payment method')
+    // Local reclassification only — does NOT re-sync (would risk a duplicate on the store).
+    db.prepare('UPDATE orders SET payment_method=? WHERE id=?').run(method, orderId)
+    return { ok: true }
+  })
 }
 
 // Background loop: push local orders to WooCommerce and pull website orders to the kitchen.

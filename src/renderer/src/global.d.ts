@@ -24,6 +24,7 @@ declare global {
       commit: (payload: unknown) => Promise<{ token: number; orderId: number }>
       reprint: (orderId: number) => Promise<{ ok: boolean }>
       voidOrder: (orderId: number, reason: string) => Promise<{ ok: boolean }>
+      setPayment: (orderId: number, method: string) => Promise<{ ok: boolean }>
       recentOrders: () => Promise<
         {
           id: number

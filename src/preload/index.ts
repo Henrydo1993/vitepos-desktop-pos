@@ -9,6 +9,7 @@ const pos = {
   commit: (payload: unknown) => ipcRenderer.invoke('order:commit', payload),
   reprint: (orderId: number) => ipcRenderer.invoke('order:reprint', orderId),
   voidOrder: (orderId: number, reason: string) => ipcRenderer.invoke('order:void', orderId, reason),
+  setPayment: (orderId: number, method: string) => ipcRenderer.invoke('order:setPayment', orderId, method),
   recentOrders: () => ipcRenderer.invoke('orders:recent'),
   syncNow: () => ipcRenderer.invoke('sync:now'),
   syncRefresh: () => ipcRenderer.invoke('sync:refresh'),

@@ -17,12 +17,20 @@ interface Row {
 
 const time = (iso: string) => new Date(iso).toLocaleString('en-AU', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })
 
+const PAY_METHODS = [
+  { k: 'cash', label: 'Cash' },
+  { k: 'card', label: 'Swipe Machine' },
+  { k: 'bank', label: 'Bank Transfer' },
+  { k: 'other', label: 'Other' },
+]
+
 export function OrdersView() {
   const staff = useAuth((s) => s.staff)
   const [scope, setScope] = useState<'today' | 'all'>('today')
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<Row[]>([])
   const [syncing, setSyncing] = useState(false)
+  const [payFor, setPayFor] = useState<number | null>(null)
 
   const load = () => window.pos.ordersList({ scope, q }).then(setRows)
   useEffect(() => {
@@ -36,6 +44,11 @@ export function OrdersView() {
     const reason = prompt('Void reason?')
     if (reason == null) return
     await window.pos.voidOrder(id, reason)
+    load()
+  }
+  const changePayment = async (id: number, method: string) => {
+    await window.pos.setPayment(id, method)
+    setPayFor(null)
     load()
   }
 
@@ -82,12 +95,30 @@ export function OrdersView() {
               <span className="r b">${o.total.toFixed(2)}{o.voided ? ' ·VOID' : ''}</span>
               <span className="acts">
                 <button onClick={() => reprint(o.id)}>Reprint</button>
+                {!o.voided && canVoid(staff) && <button onClick={() => setPayFor(o.id)}>Method</button>}
                 {!o.voided && canVoid(staff) && <button className="del" onClick={() => voidOrder(o.id)}>Void</button>}
               </span>
             </div>
           ))}
         </div>
       </div>
+      {payFor != null && (
+        <div className="modal-overlay" onClick={() => setPayFor(null)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ width: 320 }}>
+            <h3 className="modal-title">Change payment method</h3>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {PAY_METHODS.map((m) => (
+                <button key={m.k} className="btn" onClick={() => changePayment(payFor, m.k)}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <button className="btn" style={{ marginTop: 10, width: '100%' }} onClick={() => setPayFor(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
