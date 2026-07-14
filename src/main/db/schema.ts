@@ -52,6 +52,11 @@ const ALTERS: string[] = [
   'ALTER TABLE orders ADD COLUMN customer_name TEXT',
   'ALTER TABLE orders ADD COLUMN staff_name TEXT',
   'ALTER TABLE orders ADD COLUMN push_tries INTEGER DEFAULT 0',
+  // QR/waiter table settle (#1): tie a paid tab back to its origin WooCommerce order(s)
+  // instead of creating a duplicate.
+  'ALTER TABLE open_orders ADD COLUMN remote_ids TEXT',
+  'ALTER TABLE orders ADD COLUMN opal_remote_ids TEXT',
+  'ALTER TABLE orders ADD COLUMN opal_settled INTEGER DEFAULT 0',
 ]
 
 export function migrate(db: Database.Database) {

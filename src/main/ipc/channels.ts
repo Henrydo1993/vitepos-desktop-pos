@@ -5,7 +5,7 @@ import type { Session } from '../api/auth'
 import { listMenu } from '../db/repo'
 import { syncCatalog } from '../sync/catalog'
 import { fetchVariations, searchCustomers, createCustomer, fetchReceiptConfig, fetchOpalTables } from '../api/client'
-import { pushPending, reconcileDeletedOrders } from '../sync/orders'
+import { pushPending, reconcileDeletedOrders, settleOpalOrder, cancelOpalOrders, settlePendingOpal } from '../sync/orders'
 import { pollOnline, pollOpalOrders, type OnlineOrder } from '../sync/online'
 import { getSettings, saveSettings, seedPrintersFromSettings, type Settings } from '../config'
 import { priceOrder, type PriceLine, type Discount } from '../order/pricing'
@@ -155,6 +155,7 @@ function mergeOpalTab(db: BetterSqlite3.Database, o: OnlineOrder) {
   if (!o.table) return
   const lines = o.items.map((it, i) => ({
     id: o.remoteId * 1000 + i,
+    product_id: (it as { productId?: number }).productId ?? 0, // keep, so payment can settle this on WooCommerce
     name: it.name,
     price: it.price,
     qty: it.qty,
@@ -163,8 +164,8 @@ function mergeOpalTab(db: BetterSqlite3.Database, o: OnlineOrder) {
     sent: true,
   }))
   const now = new Date().toISOString()
-  const existing = db.prepare('SELECT id, lines FROM open_orders WHERE table_label=? ORDER BY id DESC LIMIT 1').get(o.table) as
-    | { id: number; lines: string }
+  const existing = db.prepare('SELECT id, lines, remote_ids FROM open_orders WHERE table_label=? ORDER BY id DESC LIMIT 1').get(o.table) as
+    | { id: number; lines: string; remote_ids: string | null }
     | undefined
   if (existing) {
     let prev: unknown[] = []
@@ -173,15 +174,24 @@ function mergeOpalTab(db: BetterSqlite3.Database, o: OnlineOrder) {
     } catch {
       /* ignore */
     }
-    db.prepare('UPDATE open_orders SET lines=?, updated_at=? WHERE id=?').run(JSON.stringify([...prev, ...lines]), now, existing.id)
+    // Track every origin WooCommerce order merged into this tab, so payment settles them all.
+    let ids: number[] = []
+    try {
+      ids = JSON.parse(existing.remote_ids || '[]')
+    } catch {
+      /* ignore */
+    }
+    if (!ids.includes(o.remoteId)) ids.push(o.remoteId)
+    db.prepare('UPDATE open_orders SET lines=?, remote_ids=?, updated_at=? WHERE id=?').run(JSON.stringify([...prev, ...lines]), JSON.stringify(ids), now, existing.id)
   } else {
     const who = o.source === 'waiter' ? 'Waiter' : 'QR order'
-    db.prepare('INSERT INTO open_orders (table_label,order_type,note,staff_name,lines,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').run(
+    db.prepare('INSERT INTO open_orders (table_label,order_type,note,staff_name,lines,remote_ids,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)').run(
       o.table,
       'table',
       o.note ?? '',
       who,
       JSON.stringify(lines),
+      JSON.stringify([o.remoteId]),
       now,
       now,
     )
@@ -246,6 +256,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     await cacheReceiptCfg(db, sessionRef.current)
     await cacheOpalTables(db, sessionRef.current)
     const push = await pushPending(db, sessionRef.current, outlet, counter).catch(() => ({ pending: 0, pushed: 0 }))
+    await settlePendingOpal(db, sessionRef.current).catch(() => ({ settled: 0 })) // retry QR/waiter settles that were offline at payment
     const recon = await reconcileDeletedOrders(db, sessionRef.current).catch(() => ({ removed: 0 }))
     try {
       const fresh = await pollOnline(db, sessionRef.current)
@@ -428,7 +439,18 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     return { id, printed: unsent.length }
   })
   ipcMain.handle('openorder:close', (_e, id: number) => {
+    // A tab cleared/cancelled unpaid: if it came from QR/waiter orders, cancel those on
+    // WooCommerce too (so no "processing" order dangles). Pay goes through order:commit,
+    // never here, so this can't cancel a just-settled order.
+    const tab = db.prepare('SELECT remote_ids FROM open_orders WHERE id=?').get(id) as { remote_ids: string | null } | undefined
+    let remoteIds: number[] = []
+    try {
+      remoteIds = JSON.parse(tab?.remote_ids || '[]')
+    } catch {
+      /* walk-in tab */
+    }
     db.prepare('DELETE FROM open_orders WHERE id=?').run(id)
+    if (remoteIds.length) void cancelOpalOrders(sessionRef.current, remoteIds).catch(() => undefined)
     return { ok: true }
   })
 
@@ -553,7 +575,29 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
       { orderType: payload.orderType, note: payload.note, customerName: payload.customerName, staffName: payload.staffName },
       !payload.openOrderId, // a dine-in tab was already fired via Send to Kitchen — don't reprint the prep tickets
     )
-    if (payload.openOrderId) db.prepare('DELETE FROM open_orders WHERE id=?').run(payload.openOrderId)
+    if (payload.openOrderId) {
+      // If this tab came from QR/waiter orders, settle those SAME WooCommerce orders
+      // (complete + paid + final items) instead of creating a duplicate. The local order
+      // stays for POS reports but is flagged synced so pushPending never re-sends it.
+      const tab = db.prepare('SELECT remote_ids FROM open_orders WHERE id=?').get(payload.openOrderId) as { remote_ids: string | null } | undefined
+      let remoteIds: number[] = []
+      try {
+        remoteIds = JSON.parse(tab?.remote_ids || '[]')
+      } catch {
+        /* walk-in tab — no origin orders */
+      }
+      if (remoteIds.length) {
+        db.prepare('UPDATE orders SET synced=1, opal_remote_ids=?, opal_settled=0, remote_id=? WHERE id=?').run(JSON.stringify(remoteIds), remoteIds[0], oid)
+        const items = payload.items.map((it) => ({ product_id: it.product_id, name: it.name, qty: it.qty }))
+        const method = payload.paymentMethod ?? 'cash'
+        void settleOpalOrder(sessionRef.current, remoteIds, items, { method, title: `${method} (POS)` })
+          .then((res) => {
+            if (res.ok) db.prepare('UPDATE orders SET opal_settled=1, remote_id=? WHERE id=?').run(res.settledId ?? remoteIds[0], oid)
+          })
+          .catch(() => undefined)
+      }
+      db.prepare('DELETE FROM open_orders WHERE id=?').run(payload.openOrderId)
+    }
     return { token, orderId: oid }
   })
 

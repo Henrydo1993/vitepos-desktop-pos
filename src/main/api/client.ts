@@ -88,6 +88,21 @@ export async function fetchOpalOrders(s: Session) {
     })
 }
 
+// Read one WooCommerce order (used to settle a QR/waiter table onto its original order).
+export async function getWcOrder(s: Session, id: number) {
+  const res = await s.http.get(`/?rest_route=/wc/v3/orders/${id}`)
+  return res.data
+}
+
+// Update one WooCommerce order in place — settle (complete + paid + final items) or cancel.
+// Targets a known order id, so it can never spawn a new/blank order (unlike a create).
+// Uses POST + method-override, not a raw PUT: nginx 405s a PUT to the ?rest_route form, and
+// ?rest_route keeps this working whether or not pretty permalinks are enabled.
+export async function updateWcOrder(s: Session, id: number, patch: Record<string, unknown>) {
+  const res = await s.http.post(`/?rest_route=/wc/v3/orders/${id}`, patch, { headers: { 'X-HTTP-Method-Override': 'PUT' } })
+  return { ok: !!res.data?.id, data: res.data }
+}
+
 // POS orders currently live on the store (WooCommerce, _is_vitepos). Used to
 // reconcile local orders against the store (drop ones deleted on the store).
 export async function fetchOrderList(s: Session, limit = 100) {

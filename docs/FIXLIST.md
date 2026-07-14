@@ -7,7 +7,14 @@ Status key: 🔴 open · 🟡 in progress · ✅ done · 🔎 needs live confirm
 
 ---
 
-## #1 🔴 CRITICAL — QR/table order, POS, and WooCommerce must be ONE synced order
+## #1 ✅ DONE — QR/table order, POS, and WooCommerce must be ONE synced order
+
+**Fixed + verified** (settle/cancel E2E against real WooCommerce: QR order → settle →
+completed+paid+final items, no duplicate; clear → cancelled). Full in-app flow verifies on a
+real till run. Implemented via `open_orders.remote_ids`, `settleOpalOrder`/`cancelOpalOrders`
+(POST + `X-HTTP-Method-Override: PUT`), `order:commit` settle branch (no duplicate push),
+`openorder:close` cancel, reconcile excludes settled orders, retry on manual ⟳.
+
 
 **Symptom (business impact):** a single dine-in table visit can become **two orders in
 WooCommerce → the sale is double-counted in reports.** POS-side edits to the table never

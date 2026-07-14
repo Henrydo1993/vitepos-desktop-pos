@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import type { Session } from '../api/auth'
-import { syncOfflineOrder } from '../api/client'
+import { syncOfflineOrder, getWcOrder, updateWcOrder } from '../api/client'
 
 interface OrderRow {
   id: number
@@ -103,7 +103,10 @@ export async function reconcileDeletedOrders(db: Database.Database, s: Session) 
   // Confirmed window: if the page was full there may be older orders we didn't see, so
   // only reconcile back to the oldest order actually fetched; otherwise the full cutoff.
   const floor = wc.length >= 100 ? oldest : cutoff
-  const local = db.prepare('SELECT id FROM orders WHERE synced=1 AND created_at >= ?').all(floor) as { id: number }[]
+  // Exclude QR/waiter-settled orders: their WooCommerce record is the _opc_source order we
+  // updated in place (not a _vtp_offline_id push), so they'd never be in `live` and would be
+  // wrongly deleted here.
+  const local = db.prepare('SELECT id FROM orders WHERE synced=1 AND opal_remote_ids IS NULL AND created_at >= ?').all(floor) as { id: number }[]
   const del = db.transaction((oid: number) => {
     db.prepare('DELETE FROM order_items WHERE order_id=?').run(oid)
     db.prepare('DELETE FROM orders WHERE id=?').run(oid)
@@ -115,4 +118,84 @@ export async function reconcileDeletedOrders(db: Database.Database, s: Session) 
     removed++
   }
   return { removed }
+}
+
+// ── QR/waiter table settle ────────────────────────────────────────────────
+// A dine-in tab that originated from QR/waiter orders must NOT become a second
+// WooCommerce order on payment. Instead we settle it onto its ORIGINAL order(s):
+// the first becomes the completed, paid record with the final items; any extra
+// interim-round orders are cancelled. One PUT per order id — never a create — so
+// it cannot repeat the $0-flood pattern.
+export interface SettleItem {
+  product_id?: number
+  name: string
+  qty: number
+}
+export async function settleOpalOrder(
+  s: Session,
+  originIds: number[],
+  finalItems: SettleItem[],
+  payment: { method: string; title: string },
+): Promise<{ ok: boolean; settledId?: number; error?: string }> {
+  if (!originIds.length) return { ok: false, error: 'no origin order' }
+  const primary = originIds[0]
+  try {
+    const order = await getWcOrder(s, primary)
+    if (!order?.id) return { ok: false, error: 'origin order not found' }
+    // Replace the line items: zero every existing one, then add the final set.
+    const existing = (order.line_items ?? []) as { id: number }[]
+    const line_items: Record<string, unknown>[] = existing.map((li) => ({ id: li.id, quantity: 0 }))
+    for (const it of finalItems) {
+      if (it.product_id && it.product_id > 0) line_items.push({ product_id: it.product_id, quantity: it.qty })
+    }
+    const res = await updateWcOrder(s, primary, {
+      status: 'completed',
+      set_paid: true,
+      payment_method: payment.method,
+      payment_method_title: payment.title,
+      line_items,
+    })
+    if (!res.ok) return { ok: false, error: 'settle update failed' }
+    for (const extra of originIds.slice(1)) {
+      await updateWcOrder(s, extra, { status: 'cancelled' }).catch(() => undefined)
+    }
+    return { ok: true, settledId: primary }
+  } catch (e) {
+    return { ok: false, error: String(e).slice(0, 300) }
+  }
+}
+
+// Cancel a QR/waiter table's WooCommerce order(s) — when a tab is voided/cleared unpaid.
+export async function cancelOpalOrders(s: Session, ids: number[]): Promise<void> {
+  for (const id of ids) {
+    await updateWcOrder(s, id, { status: 'cancelled' }).catch(() => undefined)
+  }
+}
+
+// Retry settles that couldn't reach the store at payment time (offline). Runs on the
+// manual ⟳ Sync, not the background tick.
+export async function settlePendingOpal(db: Database.Database, s: Session): Promise<{ settled: number }> {
+  const rows = db
+    .prepare(`SELECT id, opal_remote_ids, payment_method FROM orders WHERE opal_settled=0 AND opal_remote_ids IS NOT NULL`)
+    .all() as { id: number; opal_remote_ids: string; payment_method: string }[]
+  let settled = 0
+  for (const r of rows) {
+    let ids: number[] = []
+    try {
+      ids = JSON.parse(r.opal_remote_ids || '[]')
+    } catch {
+      /* skip */
+    }
+    if (!ids.length) {
+      db.prepare('UPDATE orders SET opal_settled=1 WHERE id=?').run(r.id)
+      continue
+    }
+    const items = db.prepare('SELECT product_id, name, qty FROM order_items WHERE order_id=?').all(r.id) as SettleItem[]
+    const res = await settleOpalOrder(s, ids, items, { method: r.payment_method || 'cash', title: 'POS' })
+    if (res.ok) {
+      db.prepare('UPDATE orders SET opal_settled=1, remote_id=? WHERE id=?').run(res.settledId ?? null, r.id)
+      settled++
+    }
+  }
+  return { settled }
 }
