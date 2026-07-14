@@ -90,6 +90,7 @@ async function receiptOnce(cfg: PrinterCfg, o: ReceiptData, r: ReceiptConfig, op
   p.leftRight('Subtotal', money(o.subtotal))
   if (r.showDiscount && o.discount) p.leftRight('Discount', `-${money(o.discount)}`)
   p.leftRight(r.taxLabel, money(o.tax))
+  if (o.fee) p.leftRight('Surcharge', money(o.fee))
   p.bold(true)
   p.leftRight('TOTAL', money(o.total))
   p.bold(false)

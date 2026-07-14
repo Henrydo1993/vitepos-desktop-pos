@@ -72,6 +72,7 @@ export interface ReceiptData {
   subtotal: number
   discount: number
   tax: number
+  fee?: number
   total: number
   tender: number
   change: number

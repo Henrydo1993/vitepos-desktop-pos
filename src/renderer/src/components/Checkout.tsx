@@ -35,7 +35,8 @@ export function Checkout({ onClose }: { onClose: () => void }) {
   if (!totals) return null
   const round5 = (n: number) => (Math.round(n / 0.05) * 5) / 100 // AU cash rounds to the nearest 5c
   const isCash = method === 'cash'
-  const rawTotal = totals.total + feeAmount(fee, totals.subtotal)
+  const feeAmt = feeAmount(fee, totals.subtotal)
+  const rawTotal = totals.total + feeAmt
   const total = isCash ? round5(rawTotal) : rawTotal
   const rounding = Math.round((total - rawTotal) * 100) / 100
   const amt = Number(amtStr) || 0
@@ -53,7 +54,7 @@ export function Checkout({ onClose }: { onClose: () => void }) {
     try {
       const { token } = await window.pos.commit({
         items: lines.map((l) => ({ product_id: l.product_id, name: l.name, price: l.price, qty: l.qty, station: l.station, modifiers: l.modifiers })),
-        totals: { ...totals, total, tender: paid, change: ret },
+        totals: { ...totals, total, tender: paid, change: ret, fee: feeAmt },
         paymentMethod: method,
         orderType,
         note,

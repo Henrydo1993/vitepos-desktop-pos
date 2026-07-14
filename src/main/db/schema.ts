@@ -60,6 +60,7 @@ const ALTERS: string[] = [
   // Shift attribution (#5): NULL = pre-migration (attributed by time window), 0 = rung with
   // no shift open, >0 = the shift it belongs to.
   'ALTER TABLE orders ADD COLUMN shift_id INTEGER',
+  'ALTER TABLE orders ADD COLUMN fee REAL DEFAULT 0', // surcharge amount, for the receipt + reprints
 ]
 
 export function migrate(db: Database.Database) {

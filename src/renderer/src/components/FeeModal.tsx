@@ -48,7 +48,7 @@ export function FeeModal({ onClose, subtotal }: { onClose: () => void; subtotal:
           {value || '0'}
           {type === 'percent' ? '%' : ''}
         </div>
-        <Numpad value={value} onChange={setValue} mode={type === 'percent' ? 'integer' : 'decimal'} />
+        <Numpad value={value} onChange={setValue} mode="decimal" />
         {preview > 0 && (
           <div style={{ fontSize: 13, color: 'var(--vt-text-2)', marginTop: 10 }}>
             Adds <b>${preview.toFixed(2)}</b> to ${subtotal.toFixed(2)}

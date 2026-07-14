@@ -19,7 +19,7 @@ type PricedItem = TicketItem & { price: number; product_id?: number }
 
 interface CommitPayload {
   items: (TicketItem & { price: number; product_id: number })[]
-  totals: { subtotal: number; discount: number; tax: number; total: number; tender: number; change: number }
+  totals: { subtotal: number; discount: number; tax: number; total: number; tender: number; change: number; fee?: number }
   paymentMethod?: string
   orderType?: string
   note?: string
@@ -70,15 +70,17 @@ async function cacheOpalTables(db: BetterSqlite3.Database, s: Session) {
 
 // Cached Vitepos receipt/invoice config (fetched from /basic/settings on sync).
 function getReceiptCfg(db: BetterSqlite3.Database): ReceiptConfig {
+  let cfg = DEFAULT_RECEIPT
   const row = db.prepare("SELECT value FROM meta WHERE key='cfg_receipt'").get() as { value?: string } | undefined
   if (row?.value) {
     try {
-      return JSON.parse(row.value) as ReceiptConfig
+      cfg = JSON.parse(row.value) as ReceiptConfig
     } catch {
       /* fall through to default */
     }
   }
-  return DEFAULT_RECEIPT
+  // Australian business: always print the ABN in the header (replaces WooCommerce's "Vat No").
+  return { ...cfg, vatRegLabel: 'ABN', vatReg: '66669980778', showVatReg: true }
 }
 async function cacheReceiptCfg(db: BetterSqlite3.Database, s: Session) {
   try {
@@ -205,7 +207,7 @@ function printReceiptAndTickets(
   db: BetterSqlite3.Database,
   token: number,
   items: PricedItem[],
-  totals: { subtotal: number; discount: number; tax: number; total: number; tender: number; change: number } | null,
+  totals: { subtotal: number; discount: number; tax: number; total: number; tender: number; change: number; fee?: number } | null,
   meta: { orderType?: string; note?: string; customerName?: string; staffName?: string; table?: string } = {},
   fireTickets = true,
 ) {
@@ -570,8 +572,8 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     const shiftId = (db.prepare("SELECT id FROM shifts WHERE status='open' ORDER BY id DESC LIMIT 1").get() as { id?: number } | undefined)?.id ?? 0
     const info = db
       .prepare(
-        `INSERT INTO orders (token,status,subtotal,tax,discount,total,tender,change,payment_method,order_type,note,customer_id,customer_name,staff_name,shift_id,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO orders (token,status,subtotal,tax,discount,total,tender,change,fee,payment_method,order_type,note,customer_id,customer_name,staff_name,shift_id,created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         token,
@@ -582,6 +584,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
         payload.totals.total,
         payload.totals.tender,
         payload.totals.change,
+        payload.totals.fee ?? 0,
         payload.paymentMethod ?? 'cash',
         payload.orderType ?? 'takeaway',
         payload.note ?? '',
@@ -652,6 +655,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
           subtotal: o.subtotal,
           discount: o.discount,
           tax: o.tax,
+          fee: o.fee,
           total: o.total,
           tender: o.tender,
           change: o.change,
