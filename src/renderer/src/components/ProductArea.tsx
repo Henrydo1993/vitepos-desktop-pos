@@ -20,29 +20,9 @@ export function ProductArea() {
   const [q, setQ] = useState('')
   const add = useCart((s) => s.add)
   const staff = useAuth((s) => s.staff)
-  const [syncing, setSyncing] = useState(false)
-  const [msg, setMsg] = useState('')
 
-  const doSync = async () => {
-    if (syncing) return
-    setSyncing(true)
-    try {
-      const r = await window.pos.syncRefresh()
-      window.dispatchEvent(new Event('pos:synced'))
-      setItems(await window.pos.menu())
-      const bits = [`${r.products} products`]
-      if (r.pushed) bits.push(`${r.pushed} sent`)
-      if (r.productsRemoved) bits.push(`${r.productsRemoved} deleted`)
-      if (r.removed) bits.push(`${r.removed} orders cleared`)
-      setMsg('Synced · ' + bits.join(' · '))
-    } catch {
-      setMsg('Sync failed — check connection')
-    } finally {
-      setSyncing(false)
-      setTimeout(() => setMsg(''), 4000)
-    }
-  }
-
+  // The product grid refreshes whenever the global Sync (in the sidebar) runs — it fires
+  // 'pos:synced', which this listens for. No separate refresh button needed up here.
   useEffect(() => {
     const onSynced = () => window.pos.menu().then(setItems)
     window.addEventListener('pos:synced', onSynced)
@@ -78,22 +58,12 @@ export function ProductArea() {
 
   return (
     <div className="prod">
-      <style>{`@keyframes vspin{to{transform:rotate(360deg)}} .s.spin{animation:vspin .9s linear infinite} .sync-toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:9998;box-shadow:0 6px 20px rgba(0,0,0,.25)}`}</style>
-      {msg && <div className="sync-toast">{msg}</div>}
       <div className="prod-top">
         <div className="search">
           <span>🔍</span>
           <input placeholder="Scan barcode or search product…" value={q} onChange={(e) => setQ(e.target.value)} />
-          <div className="seg">
-            <button className="on">Product</button>
-          </div>
         </div>
         <div className="status">
-          <div className={`s${syncing ? ' spin' : ''}`} title="Refresh / sync" onClick={doSync} style={{ cursor: 'pointer' }}>
-            ⟳
-          </div>
-          <div className="s" title="Online">📶</div>
-          <div className="s" title="Cash drawer">🗄️</div>
           <div className="s avatar" title={staff?.name ?? 'User'}>{(staff?.name ?? 'U').trim().charAt(0).toUpperCase()}</div>
         </div>
       </div>
