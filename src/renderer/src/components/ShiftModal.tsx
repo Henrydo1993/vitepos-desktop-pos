@@ -5,7 +5,7 @@ import { useAuth } from '../state/auth'
 const readout: CSSProperties = {
   height: 48,
   border: '1px solid var(--vt-border)',
-  borderRadius: 10,
+  borderRadius: 6,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'flex-end',

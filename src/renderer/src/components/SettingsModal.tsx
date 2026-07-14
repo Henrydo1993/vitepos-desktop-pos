@@ -9,7 +9,7 @@ const toAddr = (v: string) => {
 const toIp = (v: string) => (v || '').replace(/^tcp:\/\//, '')
 
 const lbl: React.CSSProperties = { display: 'block', fontSize: 13, color: 'var(--vt-text-2)', marginBottom: 4 }
-const inp: React.CSSProperties = { width: '100%', fontSize: 16, padding: 11, border: '1px solid var(--vt-border)', borderRadius: 10, marginBottom: 12 }
+const inp: React.CSSProperties = { width: '100%', fontSize: 16, padding: 11, border: '1px solid var(--vt-border)', borderRadius: 6, marginBottom: 12 }
 
 export function SettingsModal({ onClose, firstRun }: { onClose: () => void; firstRun?: boolean }) {
   const [s, setS] = useState<Record<string, string> | null>(null)
@@ -78,7 +78,7 @@ export function SettingsModal({ onClose, firstRun }: { onClose: () => void; firs
           {adv ? 'Hide' : 'Advanced'} connection
         </button>
         {adv && (
-          <div style={{ background: 'var(--vt-panel-bg)', padding: 12, borderRadius: 10, marginBottom: 12 }}>
+          <div style={{ background: 'var(--vt-panel-bg)', padding: 12, borderRadius: 8, marginBottom: 12 }}>
             <label style={lbl}>Store website</label>
             <input style={inp} value={s.base_url ?? ''} onChange={(e) => set('base_url', e.target.value)} />
             <label style={lbl}>POS user</label>
