@@ -70,15 +70,75 @@ actually appear before/after.)
 
 ---
 
+## #3 🔴 HIGH — Roles are not enforced (no separation of duties)
+
+**Symptom:** the `role` field (admin/manager/cashier/staff) is **display-only** — shown on the
+lock screen + sidebar, gating nothing. There are **no** `role===` checks in the renderer and
+the main-process IPC handlers receive no auth context. So **any** signed-in staff can:
+**void/refund orders, change Settings (incl. the WooCommerce credentials), remove staff,
+open/close shifts.**
+
+**Impact:** theft vector (a cashier can void a paid sale and pocket cash), and anyone can edit
+credentials or wipe staff.
+
+**Fix**
+- Define a permission map per role (e.g. cashier: sell only; manager: + void/refund/shift;
+  admin: + settings/staff).
+- Gate in the **renderer** (hide/disable) **and** enforce in **main** — pass the acting
+  staff id + verify their role in the IPC handler for privileged actions
+  (`order:void`, `settings:save`, `staff:add/remove`, `shift:*`). Renderer-only gating is
+  bypassable.
+
+**Acceptance:** [ ] a cashier PIN cannot void, refund, open Settings, or remove staff — blocked
+in the UI *and* rejected by the handler.
+
+---
+
+## #4 🔴 HIGH — Credentials at rest: plaintext App Password + weak PIN hash
+
+**Symptom:** the WooCommerce **Application Password is stored in plaintext** in local settings
+(`config.ts`/SQLite) and only base64-encoded for the Basic header — no encryption. Staff PINs
+are hashed with an **unsalted fast `sha`** of a 4-digit code (~10k combos → trivially
+reversible from the DB).
+
+**Impact:** anyone with read access to the userData folder gets **full WooCommerce API
+credentials** and can reverse every PIN.
+
+**Fix**
+- Encrypt the App Password with Electron **`safeStorage`** (OS keychain) at rest; decrypt only
+  in memory to build the session.
+- Salt PINs (per-staff random salt) and/or use a slow KDF; at minimum add a salt + rate-limit
+  verify attempts.
+
+**Acceptance:** [ ] App Password not readable in the DB/file; [ ] PIN hashes are salted and not
+reversible by lookup.
+
+---
+
+## #5 🟡 MEDIUM — Shift ↔ order attribution is timestamp-only
+
+**Symptom:** `computeShiftSummary` attributes orders by **time window**
+(`created_at >= opened_at [AND < closed_at]`) — there is **no `shift_id` on orders.**
+Consequences: orders rung with **no shift open fall outside every window → missing from the
+day report**; and `dash:today` counts by **calendar day** (`date(created_at)=date('now')`),
+which **disagrees with the shift window** for overnight shifts or pre-open sales.
+
+**Fix**
+- Add `shift_id` to `orders`; stamp the current open shift on `order:commit`.
+- Summaries + the day report group by `shift_id`; if no shift is open, either block selling or
+  attach to a synthetic "no-shift" bucket that still shows in reports.
+- Reconcile `dash:today` and the shift report onto the same basis.
+
+**Acceptance:** [ ] every order belongs to exactly one shift; [ ] day report totals == sum of
+its orders; [ ] no sale is invisible to reporting.
+
+---
+
 ## Backlog — flagged in the inventory, not yet reviewed
 
-Reviewed one-by-one next; promoted above once confirmed.
-
 - POS sales don't auto-reach WooCommerce (auto-push off since v1.0.28) → report/WC divergence.
-- App Password stored in plaintext in local SQLite; broad WooCommerce scope.
-- PIN/hash storage strength; are **roles** actually enforced (void/refund/settings/staff)?
 - `reconcileDeletedOrders` could drop legitimate orders inside its window.
 - Auto-update `autoInstallOnAppQuit` in kiosk with no rollback.
 - Plugin REST endpoints public (`__return_true`) incl. `/register-ip` — poisonable Wi-Fi gate.
-- Orders committed with no open shift; rounding vs counted-cash reconciliation.
+- Cash rounding vs counted-cash reconciliation at shift close.
 - Electron shell: `sandbox:false`, no CSP, no navigation guard.
