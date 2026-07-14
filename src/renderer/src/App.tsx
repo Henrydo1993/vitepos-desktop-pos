@@ -11,6 +11,7 @@ import { SettingsModal } from './components/SettingsModal'
 import { VirtualKeyboard } from './components/VirtualKeyboard'
 import { useAuth } from './state/auth'
 import { useCart } from './state/cart'
+import { playChime, primeChime } from './chime'
 
 export default function App() {
   const [paying, setPaying] = useState(false)
@@ -81,7 +82,9 @@ export default function App() {
   }, [locked])
 
   useEffect(() => {
+    primeChime() // let the very first order play sound, even before anyone taps in the app
     return window.pos.onOnlineOrder((d) => {
+      playChime()
       setToast(`New online order #${d.token} → kitchen`)
       setTimeout(() => setToast(null), 6000)
     })
