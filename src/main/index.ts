@@ -7,7 +7,7 @@ import type { Session } from './api/auth'
 import { openDb } from './db/connection'
 import { migrate } from './db/schema'
 import { makeSession } from './api/auth'
-import { getSettings, sessionArgs, seedPrintersFromSettings } from './config'
+import { getSettings, sessionArgs, seedPrintersFromSettings, migrateSecrets } from './config'
 import { registerIpc, startSync } from './ipc/channels'
 import { initAutoUpdate } from './updater'
 
@@ -44,6 +44,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     const db = openDb(join(app.getPath('userData'), 'pos.db'))
     migrate(db)
+    migrateSecrets(db) // encrypt any plaintext App Password left by an older build (keychain now available)
     // Seed printers from settings only on a brand-new DB (empty printers table).
     if ((db.prepare('SELECT COUNT(*) c FROM printers').get() as { c: number }).c === 0) {
       seedPrintersFromSettings(db, getSettings(db))

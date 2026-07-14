@@ -1,4 +1,8 @@
 import type BetterSqlite3 from 'better-sqlite3'
+import { encryptSecret, decryptSecret, isEncrypted } from './secret'
+
+// Keys whose stored value is encrypted at rest (OS keychain). Everything else is non-secret.
+const SECRET_KEYS = new Set(['app_password'])
 
 // Settings live in the `meta` table (cfg_* keys) so a packaged app needs no .env.
 // Resolution order per key: saved value -> dev env var -> baked default.
@@ -36,7 +40,8 @@ export function getSettings(db: BetterSqlite3.Database): Settings {
   const out: Settings = {}
   for (const k of SETTING_KEYS) {
     const row = stmt.get(`cfg_${k}`) as { value: string } | undefined
-    out[k] = (row?.value ?? process.env[ENV[k]] ?? DEFAULTS[k] ?? '').trim()
+    const stored = SECRET_KEYS.has(k) && row?.value ? decryptSecret(row.value) : row?.value
+    out[k] = (stored ?? process.env[ENV[k]] ?? DEFAULTS[k] ?? '').trim()
   }
   return out
 }
@@ -44,9 +49,24 @@ export function getSettings(db: BetterSqlite3.Database): Settings {
 export function saveSettings(db: BetterSqlite3.Database, patch: Settings) {
   const up = db.prepare('INSERT INTO meta (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')
   const tx = db.transaction((p: Settings) => {
-    for (const [k, v] of Object.entries(p)) if (SETTING_KEYS.includes(k)) up.run(`cfg_${k}`, String(v ?? '').trim())
+    for (const [k, v] of Object.entries(p)) {
+      if (!SETTING_KEYS.includes(k)) continue
+      const val = String(v ?? '').trim()
+      up.run(`cfg_${k}`, SECRET_KEYS.has(k) && val ? encryptSecret(val) : val)
+    }
   })
   tx(patch)
+}
+
+// One-time: re-encrypt any secret still sitting in plaintext (upgrade from an older build,
+// or written before the keychain was available). Safe to run on every startup.
+export function migrateSecrets(db: BetterSqlite3.Database) {
+  const row = db.prepare("SELECT value FROM meta WHERE key='cfg_app_password'").get() as { value?: string } | undefined
+  const v = row?.value
+  if (v && !isEncrypted(v)) {
+    const enc = encryptSecret(v)
+    if (isEncrypted(enc)) db.prepare("UPDATE meta SET value=? WHERE key='cfg_app_password'").run(enc)
+  }
 }
 
 // True once the owner has entered the credential the app needs to connect.

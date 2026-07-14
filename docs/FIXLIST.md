@@ -111,7 +111,14 @@ in the UI *and* rejected by the handler.
 
 ---
 
-## #4 🔴 HIGH — Credentials at rest: plaintext App Password + weak PIN hash
+## #4 ✅ DONE — Credentials at rest: plaintext App Password + weak PIN hash
+
+**Fixed:** App Password encrypted with Electron `safeStorage` (OS keychain / DPAPI) as
+`enc:v1:…`; `migrateSecrets` re-encrypts existing plaintext on first launch (no re-entry).
+PINs moved to salted **scrypt** (`pin.ts`), with transparent upgrade of legacy sha256 hashes
+on next successful unlock. PIN logic unit-tested (9/9). safeStorage path verifies on a real
+Electron run (guarded fallback if a keychain isn't available).
+
 
 **Symptom:** the WooCommerce **Application Password is stored in plaintext** in local settings
 (`config.ts`/SQLite) and only base64-encoded for the Basic header — no encryption. Staff PINs

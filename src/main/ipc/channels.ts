@@ -1,5 +1,5 @@
 import { ipcMain, app } from 'electron'
-import { createHash } from 'node:crypto'
+import { hashPin, verifyPin, isLegacyPin } from '../pin'
 import type BetterSqlite3 from 'better-sqlite3'
 import type { Session } from '../api/auth'
 import { listMenu } from '../db/repo'
@@ -317,20 +317,22 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     return { ok: true }
   })
 
-  // --- Local unlock PIN (sha-256 in meta; unlocks the till without the WP password) ---
-  const sha = (s: string) => createHash('sha256').update(s).digest('hex')
+  // --- Local unlock PIN (salted scrypt in meta; unlocks the till without the WP password) ---
   const pinHash = () => (db.prepare("SELECT value FROM meta WHERE key='pin_hash'").get() as { value?: string } | undefined)?.value
+  const setPinHash = (h: string) => db.prepare("INSERT INTO meta (key,value) VALUES ('pin_hash',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(h)
   ipcMain.handle('pin:status', () => ({ set: !!pinHash() }))
   ipcMain.handle('pin:set', (_e, pin: string) => {
-    db.prepare("INSERT INTO meta (key,value) VALUES ('pin_hash',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(sha(String(pin)))
+    setPinHash(hashPin(String(pin)))
     return { ok: true }
   })
   ipcMain.handle('pin:verify', (_e, pin: string) => {
     const h = pinHash()
-    return { ok: !!h && h === sha(String(pin)) }
+    if (!h || !verifyPin(String(pin), h)) return { ok: false }
+    if (isLegacyPin(h)) setPinHash(hashPin(String(pin))) // upgrade the old unsalted hash on use
+    return { ok: true }
   })
 
-  // --- Staff / multi-user sign-in (PINs sha-256; a legacy single PIN becomes "Manager") ---
+  // --- Staff / multi-user sign-in (salted scrypt PINs; a legacy single PIN becomes "Manager") ---
   const nowIso = () => new Date().toISOString()
   {
     const legacy = pinHash()
@@ -343,15 +345,16 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     requireRole(ADMIN, true) // managing staff/PINs — admin only (allow the first staff at setup)
     const info = db
       .prepare('INSERT INTO staff (name,pin_hash,role,active,created_at) VALUES (?,?,?,1,?)')
-      .run(String(name).trim() || 'Staff', sha(String(pin)), role || 'staff', nowIso())
+      .run(String(name).trim() || 'Staff', hashPin(String(pin)), role || 'staff', nowIso())
     return { ok: true, id: Number(info.lastInsertRowid) }
   })
   ipcMain.handle('staff:verify', (_e, staffId: number, pin: string) => {
     const row = db.prepare('SELECT id,name,role,pin_hash FROM staff WHERE id=? AND active=1').get(staffId) as
       | { id: number; name: string; role: string; pin_hash: string }
       | undefined
-    if (row && row.pin_hash === sha(String(pin))) return { ok: true, staff: { id: row.id, name: row.name, role: row.role } }
-    return { ok: false }
+    if (!row || !verifyPin(String(pin), row.pin_hash)) return { ok: false }
+    if (isLegacyPin(row.pin_hash)) db.prepare('UPDATE staff SET pin_hash=? WHERE id=?').run(hashPin(String(pin)), row.id) // upgrade on use
+    return { ok: true, staff: { id: row.id, name: row.name, role: row.role } }
   })
   ipcMain.handle('staff:remove', (_e, staffId: number) => {
     requireRole(ADMIN) // admin only
