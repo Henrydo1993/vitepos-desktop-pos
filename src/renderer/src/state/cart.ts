@@ -3,6 +3,10 @@ import type { CartLine, MenuItem } from '../types'
 
 export type OrderType = 'table' | 'walk_in' | 'takeaway' | 'delivery'
 export type Discount = { type: 'flat' | 'percent'; value: number } | null
+// A fee/surcharge is a flat dollar amount OR a percent of the subtotal (same shape as Discount).
+export type Fee = { type: 'flat' | 'percent'; value: number } | null
+export const feeAmount = (fee: Fee, subtotal: number): number =>
+  !fee ? 0 : fee.type === 'flat' ? Math.max(0, fee.value) : (subtotal * Math.max(0, fee.value)) / 100
 export interface Customer {
   id: number
   name: string
@@ -20,7 +24,7 @@ interface CartState {
   discount: Discount
   note: string
   customer: Customer | null
-  fee: number
+  fee: Fee
   tableLabel: string | null
   openOrderId: number | null
   add: (m: MenuItem) => void
@@ -34,14 +38,14 @@ interface CartState {
   setDiscount: (d: Discount) => void
   setNote: (n: string) => void
   setCustomer: (c: Customer | null) => void
-  setFee: (n: number) => void
+  setFee: (f: Fee) => void
   discardHeld: (i: number) => void
   setTable: (label: string | null, openId?: number | null) => void
   loadOpen: (o: { id: number; tableLabel: string; lines: CartLine[]; note?: string; customerId?: number | null; customerName?: string | null }) => void
   markAllSent: () => void
 }
 
-const RESET: Partial<CartState> = { lines: [], discount: null, note: '', customer: null, fee: 0, tableLabel: null, openOrderId: null }
+const RESET: Partial<CartState> = { lines: [], discount: null, note: '', customer: null, fee: null, tableLabel: null, openOrderId: null }
 
 export const useCart = create<CartState>((set) => ({
   lines: [],
@@ -50,7 +54,7 @@ export const useCart = create<CartState>((set) => ({
   discount: null,
   note: '',
   customer: null,
-  fee: 0,
+  fee: null,
   tableLabel: null,
   openOrderId: null,
   add: (m) =>
@@ -100,7 +104,7 @@ export const useCart = create<CartState>((set) => ({
   setDiscount: (d) => set({ discount: d }),
   setNote: (n) => set({ note: n }),
   setCustomer: (c) => set({ customer: c }),
-  setFee: (n) => set({ fee: Math.max(0, n || 0) }),
+  setFee: (f) => set({ fee: f }),
   discardHeld: (i) => set((s) => ({ held: s.held.filter((_, j) => j !== i) })),
   setTable: (label, openId = null) => set({ tableLabel: label, openOrderId: openId, orderType: 'table' }),
   loadOpen: (o) =>
@@ -112,7 +116,7 @@ export const useCart = create<CartState>((set) => ({
       note: o.note ?? '',
       customer: o.customerId ? { id: o.customerId, name: o.customerName ?? '' } : null,
       discount: null,
-      fee: 0,
+      fee: null,
     }),
   markAllSent: () => set((s) => ({ lines: s.lines.map((l) => ({ ...l, sent: true })) })),
 }))

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useCart, type OrderType } from '../state/cart'
+import { useCart, feeAmount, type OrderType } from '../state/cart'
 import { useAuth } from '../state/auth'
 import { DiscountModal } from './DiscountModal'
 import { CustomerModal } from './CustomerModal'
@@ -82,7 +82,7 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
   const subtotal = lines.reduce((s, l) => s + l.price * l.qty, 0)
   const qtyTotal = lines.reduce((s, l) => s + l.qty, 0)
   const discAmt = discount ? (discount.type === 'flat' ? discount.value : (subtotal * discount.value) / 100) : 0
-  const net = Math.max(0, subtotal - discAmt) + fee
+  const net = Math.max(0, subtotal - discAmt) + feeAmount(fee, subtotal)
   const when = now.toLocaleString('en-AU', {
     weekday: 'short',
     day: '2-digit',
@@ -173,7 +173,7 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
             − Discount{discAmt ? ` ($${discAmt.toFixed(2)})` : ''}
           </button>
           <button className="pill" onClick={() => setShowFee(true)}>
-            ＋ Fee{fee ? ` ($${fee.toFixed(2)})` : ''}
+            ＋ Fee{fee ? ` (${fee.type === 'percent' ? `${fee.value}%` : `$${feeAmount(fee, subtotal).toFixed(2)}`})` : ''}
           </button>
           <button className="pill" onClick={() => setShowCalc(true)}>
             🧮 Calc
@@ -226,7 +226,7 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
 
       {showDisc && <DiscountModal subtotal={subtotal} onClose={() => setShowDisc(false)} />}
       {showCust && <CustomerModal onClose={() => setShowCust(false)} />}
-      {showFee && <FeeModal onClose={() => setShowFee(false)} />}
+      {showFee && <FeeModal subtotal={subtotal} onClose={() => setShowFee(false)} />}
       {showCalc && <CalculatorModal onClose={() => setShowCalc(false)} />}
       {showHeld && <HeldOrdersModal onClose={() => setShowHeld(false)} />}
     </div>

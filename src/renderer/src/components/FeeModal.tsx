@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { useCart } from '../state/cart'
 import { Numpad } from './Numpad'
 
@@ -16,21 +16,46 @@ const readout: CSSProperties = {
   background: '#f8fafc',
 }
 
-export function FeeModal({ onClose }: { onClose: () => void }) {
+export function FeeModal({ onClose, subtotal }: { onClose: () => void; subtotal: number }) {
   const { fee, setFee } = useCart()
-  const [value, setValue] = useState(fee ? String(fee) : '')
+  const [type, setType] = useState<'percent' | 'flat'>(fee?.type ?? 'flat')
+  const [value, setValue] = useState(fee?.value ? String(fee.value) : '')
+
+  const preview = useMemo(() => {
+    const v = Number(value) || 0
+    return type === 'percent' ? (subtotal * v) / 100 : v
+  }, [type, value, subtotal])
+
   const apply = () => {
-    setFee(Number(value) || 0)
+    const v = Number(value)
+    setFee(v > 0 ? { type, value: v } : null)
     onClose()
   }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ width: 360 }}>
+      <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ width: 380 }}>
         <h3 className="modal-title">Surcharge / Fee</h3>
-        <div style={readout}>${value || '0'}</div>
-        <Numpad value={value} onChange={setValue} />
+        <div className="seg" style={{ marginBottom: 12 }}>
+          <button className={type === 'percent' ? 'on' : ''} onClick={() => setType('percent')}>
+            % Percent
+          </button>
+          <button className={type === 'flat' ? 'on' : ''} onClick={() => setType('flat')}>
+            $ Amount
+          </button>
+        </div>
+        <div style={readout}>
+          {value || '0'}
+          {type === 'percent' ? '%' : ''}
+        </div>
+        <Numpad value={value} onChange={setValue} mode={type === 'percent' ? 'integer' : 'decimal'} />
+        {preview > 0 && (
+          <div style={{ fontSize: 13, color: 'var(--vt-text-2)', marginTop: 10 }}>
+            Adds <b>${preview.toFixed(2)}</b> to ${subtotal.toFixed(2)}
+          </div>
+        )}
         <div className="btn-row" style={{ marginTop: 12 }}>
-          <button className="btn btn-del" onClick={() => { setFee(0); onClose() }}>
+          <button className="btn btn-del" onClick={() => { setFee(null); onClose() }}>
             Remove
           </button>
           <button className="btn btn-theme" style={{ flex: 2 }} onClick={apply}>

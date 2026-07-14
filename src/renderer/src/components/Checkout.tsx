@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useCart } from '../state/cart'
+import { useCart, feeAmount } from '../state/cart'
 import { useAuth } from '../state/auth'
 import { Numpad } from './Numpad'
 
@@ -35,7 +35,7 @@ export function Checkout({ onClose }: { onClose: () => void }) {
   if (!totals) return null
   const round5 = (n: number) => (Math.round(n / 0.05) * 5) / 100 // AU cash rounds to the nearest 5c
   const isCash = method === 'cash'
-  const rawTotal = totals.total + fee
+  const rawTotal = totals.total + feeAmount(fee, totals.subtotal)
   const total = isCash ? round5(rawTotal) : rawTotal
   const rounding = Math.round((total - rawTotal) * 100) / 100
   const amt = Number(amtStr) || 0
