@@ -42,6 +42,10 @@ export async function pollOnline(db: Database.Database, s: Session): Promise<Onl
     const o = normalizeOnlineOrder(raw)
     if (!o.remoteId || seen.get(o.remoteId)) continue
     mark.run(o.remoteId, new Date().toISOString())
+    // Vitepos's online-list relays QR/waiter orders here WITHOUT their line items; those are
+    // printed properly by pollOpalOrders (wc/v3). Printing a zero-item order here would just
+    // spit out a blank duplicate ticket + a "0 items" toast, so skip it (already marked seen).
+    if (o.items.length === 0) continue
     fresh.push(o)
   }
   return fresh
