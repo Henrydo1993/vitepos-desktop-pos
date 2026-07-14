@@ -26,6 +26,7 @@ const pos = {
   staffAdd: (name: string, pin: string, role: string) => ipcRenderer.invoke('staff:add', name, pin, role),
   staffVerify: (id: number, pin: string) => ipcRenderer.invoke('staff:verify', id, pin),
   staffRemove: (id: number) => ipcRenderer.invoke('staff:remove', id),
+  setStaff: (staff: { id: number; name: string; role: string } | null) => ipcRenderer.invoke('auth:setStaff', staff),
   dashToday: () => ipcRenderer.invoke('dash:today'),
   ordersList: (opts: { scope?: 'today' | 'all'; q?: string }) => ipcRenderer.invoke('orders:list', opts),
   tablesList: () => ipcRenderer.invoke('tables:list'),

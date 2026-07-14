@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Staff } from '../state/auth'
+import { canManage } from '../state/auth'
 
 export type View = 'pos' | 'tables' | 'dashboard' | 'orders'
 const NAV: { key: View; label: string; ico: string }[] = [
@@ -77,10 +78,12 @@ export function Sidebar({
         <span className="ico">🔒</span>
         <span>Lock / Switch</span>
       </button>
-      <button className="nav-item" onClick={onSettings}>
-        <span className="ico">⚙️</span>
-        <span>Settings</span>
-      </button>
+      {canManage(staff) && (
+        <button className="nav-item" onClick={onSettings}>
+          <span className="ico">⚙️</span>
+          <span>Settings</span>
+        </button>
+      )}
       {version && <div style={{ textAlign: 'center', fontSize: 10, opacity: 0.55, padding: '4px 0 8px' }}>v{version}</div>}
     </div>
   )

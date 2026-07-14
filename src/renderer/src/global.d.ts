@@ -87,6 +87,7 @@ declare global {
       staffAdd: (name: string, pin: string, role: string) => Promise<{ ok: boolean; id: number }>
       staffVerify: (id: number, pin: string) => Promise<{ ok: boolean; staff?: { id: number; name: string; role: string } }>
       staffRemove: (id: number) => Promise<{ ok: boolean }>
+      setStaff: (staff: { id: number; name: string; role: string } | null) => Promise<{ ok: boolean }>
       dashToday: () => Promise<{
         orders: number
         gross: number

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAuth, canVoid } from '../state/auth'
 
 interface Row {
   id: number
@@ -17,6 +18,7 @@ interface Row {
 const time = (iso: string) => new Date(iso).toLocaleString('en-AU', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })
 
 export function OrdersView() {
+  const staff = useAuth((s) => s.staff)
   const [scope, setScope] = useState<'today' | 'all'>('today')
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<Row[]>([])
@@ -80,7 +82,7 @@ export function OrdersView() {
               <span className="r b">${o.total.toFixed(2)}{o.voided ? ' ·VOID' : ''}</span>
               <span className="acts">
                 <button onClick={() => reprint(o.id)}>Reprint</button>
-                {!o.voided && <button className="del" onClick={() => voidOrder(o.id)}>Void</button>}
+                {!o.voided && canVoid(staff) && <button className="del" onClick={() => voidOrder(o.id)}>Void</button>}
               </span>
             </div>
           ))}

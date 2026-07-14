@@ -60,7 +60,11 @@ its origin WooCommerce order, and the payment/void paths ignore that origin orde
 
 ---
 
-## #2 🔎 Duplicate / blank kitchen ticket — both pollers process the same order
+## #2 ✅ DONE — Duplicate / blank kitchen ticket — both pollers process the same order
+
+**Fixed:** `pollOnline` now skips zero-item orders (marked seen, not printed) — the QR orders
+Vitepos relays without items print only via `pollOpalOrders`.
+
 
 **Symptom:** every QR order may also print a **blank ticket** and raise a "0 items" toast.
 
@@ -77,7 +81,13 @@ actually appear before/after.)
 
 ---
 
-## #3 🔴 HIGH — Roles are not enforced (no separation of duties)
+## #3 ✅ DONE — Roles are not enforced (no separation of duties)
+
+**Fixed:** the renderer reports the signed-in staff to main (`auth:setStaff`, cleared while
+locked); privileged handlers enforce role server-side (`order:void` → manager+, `settings:save`
+/ `staff:add` / `staff:remove` → admin, first-run exempt). UI also hides Void + Settings for
+roles that can't use them. Ranks match between main + renderer.
+
 
 **Symptom:** the `role` field (admin/manager/cashier/staff) is **display-only** — shown on the
 lock screen + sidebar, gating nothing. There are **no** `role===` checks in the renderer and

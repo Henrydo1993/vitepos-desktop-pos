@@ -44,6 +44,12 @@ export default function App() {
     })
   }, [])
 
+  // Tell the main process who's signed in so it can enforce role permissions server-side.
+  // Cleared while locked, so a locked till has no privileged identity.
+  useEffect(() => {
+    void window.pos.setStaff(locked ? null : staff)
+  }, [locked, staff])
+
   useEffect(() => {
     // Show the running version, and if it changed since last launch, prove the
     // update installed itself.

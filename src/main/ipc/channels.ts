@@ -226,6 +226,25 @@ function printReceiptAndTickets(
 
 export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, rebuildSession: () => void) {
   void cacheOpalTables(db, sessionRef.current) // pull the WordPress floor once on startup
+
+  // --- Role enforcement (server-side, not just UI) -----------------------------------------
+  // The renderer reports who unlocked the till (auth:setStaff). Privileged handlers verify the
+  // role here so a bypassed UI can't void sales, read/write credentials, or manage staff.
+  const ROLE_RANK: Record<string, number> = { staff: 0, cashier: 0, server: 0, manager: 1, admin: 2, owner: 2 }
+  const currentStaff: { current: { id: number; name: string; role: string } | null } = { current: null }
+  const staffCount = () => (db.prepare('SELECT COUNT(*) n FROM staff WHERE active=1').get() as { n: number }).n
+  const MANAGER = 1
+  const ADMIN = 2
+  function requireRole(min: number, allowFirstRun = false): void {
+    if (allowFirstRun && staffCount() === 0) return // first-run setup, before any staff exists
+    const rank = ROLE_RANK[currentStaff.current?.role ?? ''] ?? -1
+    if (rank < min) throw new Error(min >= ADMIN ? 'Admin only — please have an admin sign in.' : 'Manager or admin only — please have one sign in.')
+  }
+  ipcMain.handle('auth:setStaff', (_e, staff: { id: number; name: string; role: string } | null) => {
+    currentStaff.current = staff ?? null
+    return { ok: true }
+  })
+
   ipcMain.handle('catalog:sync', async () => {
     const r = await syncCatalog(db, sessionRef.current)
     await cacheReceiptCfg(db, sessionRef.current)
@@ -321,6 +340,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
   }
   ipcMain.handle('staff:list', () => db.prepare('SELECT id,name,role FROM staff WHERE active=1 ORDER BY id').all())
   ipcMain.handle('staff:add', (_e, name: string, pin: string, role: string) => {
+    requireRole(ADMIN, true) // managing staff/PINs — admin only (allow the first staff at setup)
     const info = db
       .prepare('INSERT INTO staff (name,pin_hash,role,active,created_at) VALUES (?,?,?,1,?)')
       .run(String(name).trim() || 'Staff', sha(String(pin)), role || 'staff', nowIso())
@@ -334,6 +354,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     return { ok: false }
   })
   ipcMain.handle('staff:remove', (_e, staffId: number) => {
+    requireRole(ADMIN) // admin only
     db.prepare('UPDATE staff SET active=0 WHERE id=?').run(staffId)
     return { ok: true }
   })
@@ -528,6 +549,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
   // --- Settings ---
   ipcMain.handle('settings:get', () => getSettings(db))
   ipcMain.handle('settings:save', (_e, patch: Settings) => {
+    requireRole(ADMIN, true) // settings hold the WooCommerce credentials — admin only (allow first-run)
     saveSettings(db, patch)
     seedPrintersFromSettings(db, getSettings(db))
     rebuildSession()
@@ -635,6 +657,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
   })
 
   ipcMain.handle('order:void', (_e, orderId: number, reason: string) => {
+    requireRole(MANAGER) // voiding a sale is a theft vector — manager/admin only
     db.prepare(`UPDATE orders SET voided=1, void_reason=?, status='cancelled', synced=0 WHERE id=?`).run(reason, orderId)
     return { ok: true }
   })

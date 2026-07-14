@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAuth, canVoid } from '../state/auth'
 
 interface Order {
   id: number
@@ -12,6 +13,7 @@ interface Order {
 }
 
 export function RecentOrdersModal({ onClose }: { onClose: () => void }) {
+  const staff = useAuth((s) => s.staff)
   const [orders, setOrders] = useState<Order[]>([])
   const load = () => window.pos.recentOrders().then(setOrders)
 
@@ -47,7 +49,7 @@ export function RecentOrdersModal({ onClose }: { onClose: () => void }) {
               <button className="btn btn-sm" onClick={() => reprint(o.id)}>
                 Reprint
               </button>
-              {!o.voided && (
+              {!o.voided && canVoid(staff) && (
                 <button className="btn btn-sm btn-del" onClick={() => voidOrder(o.id)}>
                   Void
                 </button>
