@@ -79,25 +79,32 @@ export function ProductArea() {
 
       <div className="grid">
         {shown.length === 0 && <div style={{ color: 'var(--vt-text-2)' }}>No products.</div>}
-        {shown.map((m) => (
-          <div key={m.id} className="card" onClick={() => onTap(m)}>
-            <div
-              className="img"
-              style={isPhoto(m.image) ? { backgroundImage: `url("${m.image}")` } : { background: tint(m.name) }}
-            >
-              {!isPhoto(m.image) && initials(m.name)}
-              <span className="badge">new</span>
-              <span className="add">{m.type === 'variable' ? '⊞' : '+'}</span>
-            </div>
-            <div className="cbody">
-              <div className="cname">{m.name}</div>
-              <div className="cprice">
-                ${m.price.toFixed(2)}
-                {m.type === 'variable' ? '+' : ''}
+        {shown.map((m) => {
+          const off = !!m.unavailable
+          return (
+            <div key={m.id} className={`card${off ? ' off' : ''}`} onClick={() => !off && onTap(m)} aria-disabled={off}>
+              <div
+                className="img"
+                style={isPhoto(m.image) ? { backgroundImage: `url("${m.image}")` } : { background: tint(m.name) }}
+              >
+                {!isPhoto(m.image) && initials(m.name)}
+                {!!m.special && !off && <span className="badge badge-special">★ Special</span>}
+                {off ? (
+                  <span className="soldout">Unavailable</span>
+                ) : (
+                  <span className="add">{m.type === 'variable' ? '⊞' : '+'}</span>
+                )}
+              </div>
+              <div className="cbody">
+                <div className="cname">{m.name}</div>
+                <div className="cprice">
+                  ${m.price.toFixed(2)}
+                  {m.type === 'variable' ? '+' : ''}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {variable && <VariationModal product={variable} onClose={() => setVariable(null)} />}

@@ -8,6 +8,8 @@ export interface MenuItem {
   taxable: number
   tax_rate: number
   type: string
+  unavailable?: number
+  special?: number
 }
 
 export interface Variation {

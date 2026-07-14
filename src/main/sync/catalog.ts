@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import type { Session } from '../api/auth'
-import { fetchCategories, fetchProducts, fetchTaxes } from '../api/client'
+import { fetchCategories, fetchOpalAvailability, fetchProducts, fetchTaxes } from '../api/client'
 import { upsertCategory, upsertProduct } from '../db/repo'
 
 // Mapping confirmed against live opaldessert.com.au product/list shape (see fixtures).
@@ -91,6 +91,24 @@ export async function syncCatalog(db: Database.Database, s: Session) {
       db.transaction((ids: number[]) => ids.forEach((id) => del.run(id)))(stale)
       removed = stale.length
     }
+  }
+
+  // Per-item availability + "Special" flags from opal-pos-connect (/menu). Best-effort:
+  // only overwrite when a real map comes back, so an offline fetch keeps the last-known
+  // flags instead of clearing them. Reset-then-apply so un-flagging on the store propagates.
+  try {
+    const avail = await fetchOpalAvailability(s)
+    const ids = Object.keys(avail).map(Number).filter(Boolean)
+    if (ids.length) {
+      const reset = db.prepare('UPDATE products SET unavailable=0, special=0')
+      const set = db.prepare('UPDATE products SET unavailable=?, special=? WHERE id=?')
+      db.transaction(() => {
+        reset.run()
+        for (const id of ids) set.run(avail[id].unavailable ? 1 : 0, avail[id].special ? 1 : 0, id)
+      })()
+    }
+  } catch {
+    /* availability endpoint optional — keep last-known flags */
   }
 
   try {

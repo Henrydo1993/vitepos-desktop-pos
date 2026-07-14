@@ -55,6 +55,21 @@ export async function fetchOpalTables(s: Session) {
 }
 
 
+// Per-item availability from the opal-pos-connect plugin (public GET /menu — the same
+// list the QR ordering app uses). Keyed by WooCommerce product id (== the POS product id),
+// so the POS can grey/badge/block items an admin flagged in the WordPress Products list.
+// No auth (public route). Returns { id: { unavailable, special } }.
+export async function fetchOpalAvailability(s: Session): Promise<Record<number, { unavailable: boolean; special: boolean }>> {
+  const res = await s.http.get('/?rest_route=/opal-pos/v1/menu')
+  const items = (res.data?.items ?? (Array.isArray(res.data) ? res.data : [])) as any[]
+  const map: Record<number, { unavailable: boolean; special: boolean }> = {}
+  for (const it of items) {
+    const id = Number(it.id)
+    if (id) map[id] = { unavailable: it.unavailable === true, special: it.special === true }
+  }
+  return map
+}
+
 // Ordering-app orders straight from WooCommerce (status active + _opc_source meta).
 // Vitepos online-list relays these foreign orders WITHOUT line items, so the POS could
 // never print them; wc/v3 returns the full order and the POS app-password authorises it.
