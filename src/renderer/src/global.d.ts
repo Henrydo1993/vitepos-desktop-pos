@@ -23,6 +23,27 @@ declare global {
       ) => Promise<{ subtotal: number; discount: number; tax: number; total: number }>
       commit: (payload: unknown) => Promise<{ token: number; orderId: number }>
       reprint: (orderId: number) => Promise<{ ok: boolean }>
+      orderGet: (orderId: number) => Promise<{
+        id: number
+        token: number
+        status: string
+        subtotal: number
+        tax: number
+        discount: number
+        total: number
+        tender: number
+        change: number
+        fee: number
+        payment_method: string
+        order_type: string
+        note: string | null
+        customer_name: string | null
+        staff_name: string | null
+        voided: number
+        void_reason: string | null
+        created_at: string
+        items: { name: string; qty: number; price: number; station: string; modifiers: string[] }[]
+      } | null>
       voidOrder: (orderId: number, reason: string) => Promise<{ ok: boolean }>
       setPayment: (orderId: number, method: string) => Promise<{ ok: boolean }>
       recentOrders: () => Promise<
@@ -45,6 +66,7 @@ declare global {
       openOrderGet: (
         id: number,
       ) => Promise<{ id: number; tableLabel: string; lines: CartLine[]; note: string; customerId: number | null; customerName: string | null } | null>
+      openOrderReprintPrepare: (id: number) => Promise<{ ok: boolean; stations: string[] }>
       openOrderSave: (p: {
         id?: number
         tableLabel?: string
@@ -112,6 +134,9 @@ declare global {
         }[]
       >
       onOnlineOrder: (cb: (data: { token: number; total: number; items: number }) => void) => () => void
+      onOpalTrouble: (
+        cb: (data: { kind: 'printfail' | 'pollfail' | 'error'; id?: number; table?: string; error: string }) => void,
+      ) => () => void
     }
   }
 }

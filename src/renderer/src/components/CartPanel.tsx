@@ -29,6 +29,20 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
     clear()
     onTables()
   }
+  // Re-print the kitchen prepare list for a tab already fired to the kitchen — for when the
+  // original ticket was lost or jammed. Reprints what's SAVED on the tab (via its id), not any
+  // unsaved edits in the cart, so the kitchen gets exactly what it's already making.
+  const reprintPrepare = async () => {
+    if (!openOrderId || reprinting) return
+    setReprinting(true)
+    try {
+      await window.pos.openOrderReprintPrepare(openOrderId)
+    } catch (e) {
+      alert((e as Error)?.message ?? 'Could not re-print the prepare list.')
+    } finally {
+      setReprinting(false)
+    }
+  }
   // Persist edits (remove / qty change) to a saved table tab so they stick. If the last
   // item is gone the tab is empty — delete it and free the table, instead of leaving an
   // empty tab that still shows the table occupied (green) on the floor.
@@ -73,6 +87,7 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
   const [showFee, setShowFee] = useState(false)
   const [showCalc, setShowCalc] = useState(false)
   const [showHeld, setShowHeld] = useState(false)
+  const [reprinting, setReprinting] = useState(false)
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000)
@@ -202,6 +217,11 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
             )}
           </div>
         </div>
+        {openOrderId != null && (
+          <button className="reprint-prep" onClick={reprintPrepare} disabled={reprinting} title="Re-print the kitchen prepare list for this table">
+            {reprinting ? 'Sending…' : '🖨 Re-print prepare list'}
+          </button>
+        )}
         <div className="hold-pay">
           {tableLabel ? (
             <button

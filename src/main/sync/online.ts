@@ -54,15 +54,53 @@ export async function pollOnline(db: Database.Database, s: Session): Promise<Onl
 // Ordering-app orders polled straight from WooCommerce (see fetchOpalOrders). A separate
 // seen table keeps it from colliding with the Vitepos online-list poll. Carries the table
 // label + note so the prepare ticket prints big with the table name.
+//
+// IMPORTANT: this does NOT mark orders seen. The caller marks an order seen only once it has
+// actually been recorded on the floor tab (see deliverOpalOrder). Marking on fetch is what
+// silently dropped orders: any hiccup after the mark (print failure, a throw) lost the order
+// forever, because it was already recorded as "handled" and never re-polled.
 export async function pollOpalOrders(db: Database.Database, s: Session): Promise<OnlineOrder[]> {
   const rows = await fetchOpalOrders(s)
   const seen = db.prepare(`SELECT 1 FROM seen_opal WHERE remote_id=?`)
-  const mark = db.prepare(`INSERT OR IGNORE INTO seen_opal (remote_id, seen_at) VALUES (?, ?)`)
   const fresh: OnlineOrder[] = []
   for (const raw of rows) {
     if (!raw.id || seen.get(raw.id)) continue
-    mark.run(raw.id, new Date().toISOString())
     fresh.push({ remoteId: raw.id, token: raw.id, items: raw.items, total: 0, table: raw.table, note: raw.note, source: raw.source })
   }
   return fresh
+}
+
+export function markOpalSeen(db: Database.Database, id: number): void {
+  db.prepare(`INSERT OR IGNORE INTO seen_opal (remote_id, seen_at) VALUES (?, ?)`).run(id, new Date().toISOString())
+}
+
+// Deliver ONE ordering-app order to the floor + kitchen, safely:
+//   1. record it on the table's tab (so it's visible on the floor). If this throws, we do NOT
+//      mark it seen, so the next poll (15s) retries it instead of losing it.
+//   2. only then mark it seen — now it can't be re-fetched or duplicated.
+//   3. print best-effort — a printer hiccup surfaces onPrintFail but must NOT lose the order
+//      (it's already recorded; the operator can reprint).
+// Dependencies are injected so the exact ordering is unit-testable without the DB or a printer.
+export interface DeliverDeps {
+  record: (o: OnlineOrder) => void
+  markSeen: (id: number) => void
+  print: (o: OnlineOrder) => void | Promise<void>
+  onReceived: (o: OnlineOrder) => void
+  onPrintFail: (o: OnlineOrder, err: unknown) => void
+}
+export async function deliverOpalOrder(o: OnlineOrder, deps: DeliverDeps): Promise<void> {
+  deps.record(o)
+  deps.markSeen(o.remoteId)
+  try {
+    // Awaited on purpose: the printer path is serialized, so this resolves only once the ticket has
+    // actually printed (or rejects after its retries are exhausted). A fire-and-forget print would
+    // make onPrintFail unreachable — which is exactly how failed tickets used to vanish silently.
+    await deps.print(o)
+  } catch (err) {
+    // Recorded on the floor but the ticket didn't print. Raise the red alarm ONLY — do not also
+    // fire the reassuring "→ kitchen" chime, which would contradict it. Operator reprints manually.
+    deps.onPrintFail(o, err)
+    return
+  }
+  deps.onReceived(o)
 }

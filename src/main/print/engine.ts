@@ -18,6 +18,41 @@ function make(cfg: PrinterCfg) {
   })
 }
 
+// A thermal printer accepts ONE TCP connection at a time. Firing prints concurrently — e.g. a
+// burst of QR orders during a rush — opens a socket storm the printer can't service: connection
+// probes time out, every WithRetry piles on 3 more attempts, and the printer collapses and never
+// catches up until the burst ends. (That is what killed a whole dinner service.) So every print
+// to a given printer address is serialized through a per-address queue: bursts queue and drain
+// one at a time, in order, at the printer's own pace.
+const noop = () => {}
+const printChains = new Map<string, Promise<unknown>>()
+function serialized<T>(address: string, task: () => Promise<T>): Promise<T> {
+  const prev = printChains.get(address) ?? Promise.resolve()
+  const run = prev.then(task, task) // start only after the previous print settles (ok OR failed)
+  printChains.set(address, run.then(noop, noop)) // keep the chain alive; one failure can't poison the tail
+  return run
+}
+
+// The retry loop shared by every ticket type, run inside the per-printer queue. Extracted so the
+// serialization applies uniformly — receipts, kitchen tickets and reports all share one printer.
+async function withRetry(cfg: PrinterCfg, once: () => Promise<void>, tries: number): Promise<void> {
+  return serialized(cfg.address, async () => {
+    let lastErr: unknown
+    for (let i = 0; i < tries; i++) {
+      try {
+        await once()
+        printEvents.emit('ok', { station: cfg.station })
+        return
+      } catch (e) {
+        lastErr = e
+        await new Promise((res) => setTimeout(res, 400 * (i + 1)))
+      }
+    }
+    printEvents.emit('fail', { station: cfg.station, error: String(lastErr) })
+    throw lastErr
+  })
+}
+
 export async function printBody(cfg: PrinterCfg, body: string, opts: { kickDrawer?: boolean } = {}) {
   const p = make(cfg)
   if (!(await p.isPrinterConnected())) throw new Error(`printer ${cfg.station} offline (${cfg.address})`)
@@ -34,19 +69,7 @@ export async function printWithRetry(
   opts: { kickDrawer?: boolean } = {},
   tries = 3,
 ) {
-  let lastErr: unknown
-  for (let i = 0; i < tries; i++) {
-    try {
-      await printBody(cfg, body, opts)
-      printEvents.emit('ok', { station: cfg.station })
-      return
-    } catch (e) {
-      lastErr = e
-      await new Promise((r) => setTimeout(r, 400 * (i + 1)))
-    }
-  }
-  printEvents.emit('fail', { station: cfg.station, error: String(lastErr) })
-  throw lastErr
+  return withRetry(cfg, () => printBody(cfg, body, opts), tries)
 }
 
 // Render a customer receipt with real printer formatting, honouring the Vitepos
@@ -118,19 +141,7 @@ export async function printReceiptWithRetry(
   opts: { kickDrawer?: boolean } = {},
   tries = 3,
 ) {
-  let lastErr: unknown
-  for (let i = 0; i < tries; i++) {
-    try {
-      await receiptOnce(cfg, o, r, opts)
-      printEvents.emit('ok', { station: cfg.station })
-      return
-    } catch (e) {
-      lastErr = e
-      await new Promise((res) => setTimeout(res, 400 * (i + 1)))
-    }
-  }
-  printEvents.emit('fail', { station: cfg.station, error: String(lastErr) })
-  throw lastErr
+  return withRetry(cfg, () => receiptOnce(cfg, o, r, opts), tries)
 }
 
 // End-of-day sales summary (Z-report) with proper formatting.
@@ -176,19 +187,7 @@ async function reportOnce(cfg: PrinterCfg, r: DayReport, opts: { kickDrawer?: bo
 }
 
 export async function printReportWithRetry(cfg: PrinterCfg, r: DayReport, opts: { kickDrawer?: boolean } = {}, tries = 3) {
-  let lastErr: unknown
-  for (let i = 0; i < tries; i++) {
-    try {
-      await reportOnce(cfg, r, opts)
-      printEvents.emit('ok', { station: cfg.station })
-      return
-    } catch (e) {
-      lastErr = e
-      await new Promise((res) => setTimeout(res, 400 * (i + 1)))
-    }
-  }
-  printEvents.emit('fail', { station: cfg.station, error: String(lastErr) })
-  throw lastErr
+  return withRetry(cfg, () => reportOnce(cfg, r, opts), tries)
 }
 
 // Kitchen / "PREPARE" slip — big text so it reads across the room; the table
@@ -240,17 +239,5 @@ async function kitchenOnce(cfg: PrinterCfg, t: KitchenTicket) {
 }
 
 export async function printKitchenWithRetry(cfg: PrinterCfg, t: KitchenTicket, tries = 3) {
-  let lastErr: unknown
-  for (let i = 0; i < tries; i++) {
-    try {
-      await kitchenOnce(cfg, t)
-      printEvents.emit('ok', { station: cfg.station })
-      return
-    } catch (e) {
-      lastErr = e
-      await new Promise((res) => setTimeout(res, 400 * (i + 1)))
-    }
-  }
-  printEvents.emit('fail', { station: cfg.station, error: String(lastErr) })
-  throw lastErr
+  return withRetry(cfg, () => kitchenOnce(cfg, t), tries)
 }

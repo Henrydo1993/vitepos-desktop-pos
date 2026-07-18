@@ -8,6 +8,7 @@ const pos = {
   price: (lines: unknown[], d: unknown) => ipcRenderer.invoke('order:price', lines, d),
   commit: (payload: unknown) => ipcRenderer.invoke('order:commit', payload),
   reprint: (orderId: number) => ipcRenderer.invoke('order:reprint', orderId),
+  orderGet: (orderId: number) => ipcRenderer.invoke('order:get', orderId),
   voidOrder: (orderId: number, reason: string) => ipcRenderer.invoke('order:void', orderId, reason),
   setPayment: (orderId: number, method: string) => ipcRenderer.invoke('order:setPayment', orderId, method),
   recentOrders: () => ipcRenderer.invoke('orders:recent'),
@@ -32,6 +33,7 @@ const pos = {
   ordersList: (opts: { scope?: 'today' | 'all'; q?: string }) => ipcRenderer.invoke('orders:list', opts),
   tablesList: () => ipcRenderer.invoke('tables:list'),
   openOrderGet: (id: number) => ipcRenderer.invoke('openorder:get', id),
+  openOrderReprintPrepare: (id: number) => ipcRenderer.invoke('openorder:reprintPrepare', id),
   openOrderSave: (p: unknown) => ipcRenderer.invoke('openorder:save', p),
   openOrderSend: (p: unknown) => ipcRenderer.invoke('openorder:send', p),
   openOrderClose: (id: number) => ipcRenderer.invoke('openorder:close', id),
@@ -45,6 +47,21 @@ const pos = {
     const listener = (_e: IpcRendererEvent, data: { token: number; total: number; items: number }) => cb(data)
     ipcRenderer.on('online:new', listener)
     return () => ipcRenderer.removeListener('online:new', listener)
+  },
+  // Failures on the QR/waiter delivery path — the operator MUST see these (they used to be silent).
+  onOpalTrouble: (cb: (data: { kind: 'printfail' | 'pollfail' | 'error'; id?: number; table?: string; error: string }) => void) => {
+    const mk = (kind: 'printfail' | 'pollfail' | 'error') => (_e: IpcRendererEvent, data: { id?: number; table?: string; error: string }) => cb({ kind, ...data })
+    const l1 = mk('printfail')
+    const l2 = mk('pollfail')
+    const l3 = mk('error')
+    ipcRenderer.on('opal:printfail', l1)
+    ipcRenderer.on('opal:pollfail', l2)
+    ipcRenderer.on('opal:error', l3)
+    return () => {
+      ipcRenderer.removeListener('opal:printfail', l1)
+      ipcRenderer.removeListener('opal:pollfail', l2)
+      ipcRenderer.removeListener('opal:error', l3)
+    }
   },
 }
 

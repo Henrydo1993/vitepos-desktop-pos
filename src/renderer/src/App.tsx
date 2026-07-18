@@ -19,6 +19,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [firstRun, setFirstRun] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [opalAlert, setOpalAlert] = useState<string | null>(null)
   const [version, setVersion] = useState('')
   const [locked, setLocked] = useState(true)
   const { staff, setStaff } = useAuth()
@@ -83,11 +84,26 @@ export default function App() {
 
   useEffect(() => {
     primeChime() // let the very first order play sound, even before anyone taps in the app
-    return window.pos.onOnlineOrder((d) => {
+    const offNew = window.pos.onOnlineOrder((d) => {
       playChime()
       setToast(`New online order #${d.token} → kitchen`)
       setTimeout(() => setToast(null), 6000)
     })
+    // A QR/waiter order that failed to reach the kitchen must be LOUD and STAY on screen — this is
+    // the exact failure that used to be invisible. Chime + a red banner that holds until dismissed.
+    const offTrouble = window.pos.onOpalTrouble((t) => {
+      playChime()
+      const where = t.table ? ` (${t.table})` : ''
+      if (t.kind === 'printfail')
+        setOpalAlert(`Order #${t.id}${where} is on its table but the KITCHEN TICKET DID NOT PRINT — reprint it from Orders. [${t.error}]`)
+      else if (t.kind === 'pollfail')
+        setOpalAlert(`Can't reach online orders right now — QR/waiter orders may not be coming through. Check the internet. [${t.error}]`)
+      else setOpalAlert(`A QR/waiter order${where} couldn't be loaded — it will retry automatically. If it keeps failing, call support. [${t.error}]`)
+    })
+    return () => {
+      offNew()
+      offTrouble()
+    }
   }, [])
 
   return (
@@ -122,6 +138,12 @@ export default function App() {
             setFirstRun(false)
           }}
         />
+      )}
+      {opalAlert && (
+        <div className="alert-banner" role="alert" onClick={() => setOpalAlert(null)}>
+          <span className="alert-msg">⚠ {opalAlert}</span>
+          <span className="alert-x">Tap to dismiss</span>
+        </div>
       )}
       {toast && <div className="toast">{toast}</div>}
       <VirtualKeyboard />

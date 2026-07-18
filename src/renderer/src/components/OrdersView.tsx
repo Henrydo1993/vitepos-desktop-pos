@@ -15,6 +15,8 @@ interface Row {
   created_at: string
 }
 
+type OrderDetail = NonNullable<Awaited<ReturnType<Window['pos']['orderGet']>>>
+
 const time = (iso: string) => new Date(iso).toLocaleString('en-AU', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })
 
 const PAY_METHODS = [
@@ -31,6 +33,12 @@ export function OrdersView() {
   const [rows, setRows] = useState<Row[]>([])
   const [syncing, setSyncing] = useState(false)
   const [payFor, setPayFor] = useState<number | null>(null)
+  const [detail, setDetail] = useState<OrderDetail | null>(null)
+
+  const openDetail = async (id: number) => {
+    const d = await window.pos.orderGet(id)
+    if (d) setDetail(d)
+  }
 
   const load = () => window.pos.ordersList({ scope, q }).then(setRows)
   useEffect(() => {
@@ -85,7 +93,7 @@ export function OrdersView() {
           </div>
           {rows.length === 0 && <div className="ov-none">No orders.</div>}
           {rows.map((o) => (
-            <div className={`ov-tr${o.voided ? ' void' : ''}`} key={o.id}>
+            <div className={`ov-tr ov-click${o.voided ? ' void' : ''}`} key={o.id} onClick={() => openDetail(o.id)} title="View items">
               <span className="b">#{o.token}</span>
               <span>{time(o.created_at)}</span>
               <span className="cap">{(o.order_type || '').replace('_', '-')}</span>
@@ -93,7 +101,7 @@ export function OrdersView() {
               <span className="ell">{o.staff_name || '—'}</span>
               <span className="cap">{o.payment_method}</span>
               <span className="r b">${o.total.toFixed(2)}{o.voided ? ' ·VOID' : ''}</span>
-              <span className="acts">
+              <span className="acts" onClick={(e) => e.stopPropagation()}>
                 <button onClick={() => reprint(o.id)}>Reprint</button>
                 {!o.voided && canVoid(staff) && <button onClick={() => setPayFor(o.id)}>Method</button>}
                 {!o.voided && canVoid(staff) && <button className="del" onClick={() => voidOrder(o.id)}>Void</button>}
@@ -116,6 +124,52 @@ export function OrdersView() {
             <button className="btn" style={{ marginTop: 10, width: '100%' }} onClick={() => setPayFor(null)}>
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+      {detail && (
+        <div className="modal-overlay" onClick={() => setDetail(null)}>
+          <div className="modal-sheet ovd" onClick={(e) => e.stopPropagation()}>
+            <div className="ovd-head">
+              <div>
+                <h3 className="modal-title" style={{ margin: 0 }}>Order #{detail.token}</h3>
+                <div className="ovd-sub">
+                  {time(detail.created_at)} · {(detail.order_type || '').replace('_', '-')} · {detail.staff_name || '—'}
+                  {detail.customer_name ? ` · ${detail.customer_name}` : ''}
+                </div>
+              </div>
+              <button className="ovd-x" onClick={() => setDetail(null)} aria-label="Close">✕</button>
+            </div>
+            {detail.voided ? <div className="ovd-void">VOIDED{detail.void_reason ? ` — ${detail.void_reason}` : ''}</div> : null}
+            <div className="ovd-items">
+              {detail.items.length === 0 && <div className="ovd-empty">No item detail saved for this order.</div>}
+              {detail.items.map((it, i) => (
+                <div className="ovd-item" key={i}>
+                  <span className="ovd-q">{it.qty}×</span>
+                  <span className="ovd-n">
+                    {it.name}
+                    {it.modifiers && it.modifiers.length ? <span className="ovd-mods">{it.modifiers.join(', ')}</span> : null}
+                  </span>
+                  <span className="ovd-p">${(it.price * it.qty).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="ovd-tot">
+              <div><span>Subtotal</span><span>${detail.subtotal.toFixed(2)}</span></div>
+              {detail.discount ? <div><span>Discount</span><span>−${detail.discount.toFixed(2)}</span></div> : null}
+              {detail.fee ? <div><span>Fee</span><span>${detail.fee.toFixed(2)}</span></div> : null}
+              {detail.tax ? <div><span>Tax</span><span>${detail.tax.toFixed(2)}</span></div> : null}
+              <div className="ovd-grand"><span>Total</span><span>${detail.total.toFixed(2)}</span></div>
+              <div className="ovd-pay">
+                <span className="cap">{detail.payment_method}</span>
+                <span>Tendered ${detail.tender.toFixed(2)} · Change ${detail.change.toFixed(2)}</span>
+              </div>
+            </div>
+            {detail.note ? <div className="ovd-note">Note: {detail.note}</div> : null}
+            <div className="ovd-acts">
+              <button className="btn" onClick={() => reprint(detail.id)}>Reprint receipt</button>
+              <button className="btn ovd-close" onClick={() => setDetail(null)}>Close</button>
+            </div>
           </div>
         </div>
       )}
@@ -146,4 +200,27 @@ const OV_CSS = `
 .acts{display:flex;gap:6px;justify-content:flex-end}
 .acts button{border:1px solid var(--vt-border,#e5e8ee);background:#fff;border-radius:8px;padding:6px 10px;font-size:12.5px;font-weight:600;cursor:pointer;color:#334155}
 .acts button.del{color:#e0405a;border-color:rgba(224,64,90,.35)}
+.ov-click{cursor:pointer}
+.ov-click:hover{background:#f8fafc}
+.ovd{width:440px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;padding:18px}
+.ovd-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.ovd-sub{font-size:12.5px;color:#64748b;margin-top:3px;text-transform:capitalize}
+.ovd-x{border:none;background:#f1f5f9;width:30px;height:30px;border-radius:8px;font-size:15px;cursor:pointer;color:#475569;flex:0 0 auto}
+.ovd-void{margin-top:10px;background:#fee2e2;color:#b91c1c;font-weight:800;font-size:12.5px;padding:6px 10px;border-radius:8px;letter-spacing:.4px}
+.ovd-items{margin-top:12px;overflow:auto;border:1px solid #eef1f5;border-radius:10px}
+.ovd-item{display:grid;grid-template-columns:38px 1fr auto;align-items:baseline;gap:8px;padding:9px 12px;border-top:1px solid #f2f4f7;font-size:14px}
+.ovd-item:first-child{border-top:none}
+.ovd-q{font-weight:800;color:#0f172a}
+.ovd-n{color:#0f172a}
+.ovd-mods{display:block;font-size:12px;color:#7c8698;margin-top:1px}
+.ovd-p{font-weight:700;color:#0f172a;white-space:nowrap}
+.ovd-empty{padding:16px;text-align:center;color:#9aa1ab;font-size:13px}
+.ovd-tot{margin-top:12px;font-size:13.5px;color:#475569}
+.ovd-tot>div{display:flex;justify-content:space-between;padding:3px 2px}
+.ovd-grand{font-weight:800;color:#0f172a;font-size:16px;border-top:1px solid #eef1f5;margin-top:4px;padding-top:8px!important}
+.ovd-pay{color:#64748b;font-size:12.5px;margin-top:2px}
+.ovd-note{margin-top:10px;background:#fff8e6;border:1px solid #f6e4b0;color:#8a6d20;font-size:13px;padding:8px 10px;border-radius:8px}
+.ovd-acts{display:flex;gap:8px;margin-top:16px}
+.ovd-acts .btn{flex:1}
+.ovd-acts .ovd-close{background:var(--vt-main,#1e3a8a);color:#fff;border-color:var(--vt-main,#1e3a8a)}
 `

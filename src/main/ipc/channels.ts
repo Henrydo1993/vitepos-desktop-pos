@@ -6,7 +6,7 @@ import { listMenu } from '../db/repo'
 import { syncCatalog } from '../sync/catalog'
 import { fetchVariations, searchCustomers, createCustomer, fetchReceiptConfig, fetchOpalTables } from '../api/client'
 import { pushPending, reconcileDeletedOrders, settleOpalOrder, cancelOpalOrders, settlePendingOpal } from '../sync/orders'
-import { pollOnline, pollOpalOrders, type OnlineOrder } from '../sync/online'
+import { pollOnline, pollOpalOrders, deliverOpalOrder, markOpalSeen, type OnlineOrder } from '../sync/online'
 import { getSettings, saveSettings, seedPrintersFromSettings, type Settings } from '../config'
 import { priceOrder, type PriceLine, type Discount } from '../order/pricing'
 import { routeByStation, stationForCategory, stationLabel, type TicketItem } from '../print/router'
@@ -186,7 +186,11 @@ function mergeOpalTab(db: BetterSqlite3.Database, o: OnlineOrder) {
     } catch {
       /* ignore */
     }
-    if (!ids.includes(o.remoteId)) ids.push(o.remoteId)
+    // Idempotent: if this WooCommerce order is already merged into the tab, do nothing. Without
+    // this, re-processing the same order (an overlapping poll, a retry) re-appends the food and
+    // silently double-bills the table.
+    if (ids.includes(o.remoteId)) return
+    ids.push(o.remoteId)
     db.prepare('UPDATE open_orders SET lines=?, remote_ids=?, updated_at=? WHERE id=?').run(JSON.stringify([...prev, ...lines]), JSON.stringify(ids), now, existing.id)
   } else {
     const who = o.source === 'waiter' ? 'Waiter' : 'QR order'
@@ -200,6 +204,60 @@ function mergeOpalTab(db: BetterSqlite3.Database, o: OnlineOrder) {
       now,
       now,
     )
+  }
+}
+
+// Only one delivery pass may run at a time. Ticks fire every 15s AND the operator can hit Sync;
+// because each order's kitchen ticket is now awaited, a busy pass can outlast the interval. Two
+// overlapping passes would both fetch the same not-yet-seen orders and double-print/double-record,
+// so a later pass simply skips while one is still draining (its orders are caught next tick).
+let opalDelivering = false
+
+// Poll the ordering-app (QR/waiter) orders and deliver each one robustly. This is the path that
+// silently lost a whole dinner service. Three faults combined: (1) orders were marked "seen" the
+// instant they were fetched — before printing — so any later hiccup lost them forever; (2) one
+// throw aborted the entire batch; (3) every error was swallowed, so it failed invisibly. On top of
+// that the prints were fire-and-forget: under a rush, dozens of concurrent TCP connections stormed
+// the single-socket printer and it collapsed. Now: prints are serialized + awaited, an order is
+// marked seen only after it's recorded on the floor, each order is isolated, and every failure
+// (print, record, or the poll itself) raises a visible alert instead of vanishing.
+async function deliverOpalBatch(db: BetterSqlite3.Database, session: Session, notify: Notify | null): Promise<void> {
+  if (opalDelivering) return
+  opalDelivering = true
+  try {
+    const msg = (e: unknown) => String((e as Error)?.message ?? e)
+    let opal: OnlineOrder[]
+    try {
+      opal = await pollOpalOrders(db, session)
+    } catch (e) {
+      console.error('[opal] poll failed', e)
+      notify?.('opal:pollfail', { error: msg(e) })
+      return
+    }
+    for (const o of opal) {
+      try {
+        const staged = assignStations(db, o.items)
+        await deliverOpalOrder(
+          { ...o, items: staged },
+          {
+            record: (x) => mergeOpalTab(db, x),
+            markSeen: (id) => markOpalSeen(db, id),
+            print: (x) => printOpalTickets(db, x), // awaited + serialized per printer
+            onReceived: (x) => notify?.('online:new', { token: x.token, total: x.total, items: x.items.length, table: x.table }),
+            onPrintFail: (x, e) => {
+              console.error('[opal] print failed for order', x.remoteId, e)
+              notify?.('opal:printfail', { id: x.remoteId, table: x.table, error: msg(e) })
+            },
+          },
+        )
+      } catch (e) {
+        // record/assign threw — the order was NOT marked seen, so the next poll (15s) retries it.
+        console.error('[opal] failed to deliver order', o.remoteId, e)
+        notify?.('opal:error', { id: o.remoteId, table: o.table, error: msg(e) })
+      }
+    }
+  } finally {
+    opalDelivering = false
   }
 }
 
@@ -226,6 +284,21 @@ function printReceiptAndTickets(
   for (const [station, list] of Object.entries(routeByStation(items))) {
     const cfg = byStation[station] ?? byStation.counter
     if (cfg) void printKitchenWithRetry(cfg, buildKitchenTicket({ token, station: stationLabel(station), table: meta.table, items: list, orderType: meta.orderType, note: meta.note }))
+  }
+}
+
+// Kitchen tickets for ONE QR/waiter order, AWAITED (unlike printReceiptAndTickets, which fires and
+// forgets). The delivery path awaits this so a genuine print failure actually propagates to the
+// operator alert instead of vanishing into an un-awaited promise — and so mark-seen is meaningful.
+// Prints are serialized per printer inside printKitchenWithRetry, so awaiting here can't storm it.
+async function printOpalTickets(db: BetterSqlite3.Database, o: OnlineOrder): Promise<void> {
+  const byStation = printersOf(db)
+  const routed = Object.entries(routeByStation(o.items))
+  if (routed.length === 0) return
+  for (const [station, list] of routed) {
+    const cfg = byStation[station] ?? byStation.counter
+    if (!cfg) throw new Error(`no printer configured for station "${station}" (and no counter fallback)`)
+    await printKitchenWithRetry(cfg, buildKitchenTicket({ token: o.token, station: stationLabel(station), table: o.table, items: list, orderType: 'table', note: o.note }))
   }
 }
 
@@ -288,16 +361,9 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     } catch {
       /* offline */
     }
-    try {
-      const opal = await pollOpalOrders(db, sessionRef.current)
-      for (const o of opal) {
-        const staged = assignStations(db, o.items)
-        mergeOpalTab(db, { ...o, items: staged })
-        printReceiptAndTickets(db, o.token, staged, null, { table: o.table, note: o.note, orderType: 'table' })
-      }
-    } catch {
-      /* offline */
-    }
+    // Manual sync has no renderer channel to notify (its result is returned to the caller),
+    // so failures surface via console only; the background tick does the live toasting.
+    await deliverOpalBatch(db, sessionRef.current, null)
     return { products, productsRemoved, pushed: push.pushed, removed: recon.removed }
   })
   ipcMain.handle('customer:search', (_e, q: string) => searchCustomers(sessionRef.current, q))
@@ -404,6 +470,27 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
       .all(params)
   })
 
+  // Full detail of one past order — every line item + totals — so staff can look back at a
+  // finished order to check what was actually rung up (e.g. to trace a mistake).
+  ipcMain.handle('order:get', (_e, id: number) => {
+    const o = db
+      .prepare(
+        'SELECT id,token,status,subtotal,tax,discount,total,tender,change,fee,payment_method,order_type,note,customer_name,staff_name,voided,void_reason,created_at FROM orders WHERE id=?',
+      )
+      .get(id) as Record<string, unknown> | undefined
+    if (!o) return null
+    const items = (
+      db.prepare('SELECT name,qty,price,station,modifiers FROM order_items WHERE order_id=? ORDER BY id').all(id) as {
+        name: string
+        qty: number
+        price: number
+        station: string
+        modifiers: string
+      }[]
+    ).map((it) => ({ name: it.name, qty: it.qty, price: it.price, station: it.station, modifiers: JSON.parse(it.modifiers || '[]') as string[] }))
+    return { ...o, items }
+  })
+
   // --- Restaurant: tables + open tabs (unpaid, fired to kitchen) ---
   ipcMain.handle('tables:list', () => {
     const opens = db.prepare('SELECT id,table_label,lines,updated_at FROM open_orders').all() as {
@@ -446,6 +533,24 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
       /* ignore */
     }
     return { id: o.id, tableLabel: o.table_label, lines, note: o.note, customerId: o.customer_id, customerName: o.customer_name, staffName: o.staff_name }
+  })
+  // Re-print the kitchen PREPARE list for a currently-serving tab, e.g. when the original
+  // ticket was lost or jammed. Prints only the prep tickets (no receipt); serialized per
+  // printer like every other print, so it can't storm a busy printer.
+  ipcMain.handle('openorder:reprintPrepare', (_e, id: number) => {
+    const o = db.prepare('SELECT id,table_label,lines,note FROM open_orders WHERE id=?').get(id) as
+      | { id: number; table_label: string; lines: string; note: string | null }
+      | undefined
+    if (!o) throw new Error('This table has no open order.')
+    let lines: PricedItem[] = []
+    try {
+      lines = JSON.parse(o.lines || '[]')
+    } catch {
+      /* ignore */
+    }
+    if (!lines.length) throw new Error('Nothing to print — this table has no items yet.')
+    printReceiptAndTickets(db, o.id, lines, null, { table: o.table_label, note: o.note ?? undefined, orderType: 'table' })
+    return { ok: true, stations: [...new Set(lines.map((l) => l.station ?? 'kitchen'))] }
   })
   ipcMain.handle('openorder:save', (_e, p: OpenOrderPayload) => ({ id: saveOpenOrder(db, p) }))
   ipcMain.handle('openorder:send', (_e, p: OpenOrderPayload) => {
@@ -700,17 +805,7 @@ export function startSync(db: BetterSqlite3.Database, sessionRef: SessionRef, no
     } catch {
       /* offline */
     }
-    try {
-      const opal = await pollOpalOrders(db, sessionRef.current)
-      for (const o of opal) {
-        const staged = assignStations(db, o.items)
-        mergeOpalTab(db, { ...o, items: staged })
-        printReceiptAndTickets(db, o.token, staged, null, { table: o.table, note: o.note, orderType: 'table' })
-        notify('online:new', { token: o.token, total: o.total, items: o.items.length })
-      }
-    } catch {
-      /* offline */
-    }
+    await deliverOpalBatch(db, sessionRef.current, notify)
   }
   const interval = Number(process.env.SYNC_INTERVAL_MS ?? 15000)
   setInterval(() => void tick(), interval)
