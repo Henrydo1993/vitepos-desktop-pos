@@ -76,11 +76,16 @@ export async function fetchOpalAvailability(s: Session): Promise<Record<number, 
 // Bounded to the last 3h so a first poll after an update doesn't reprint history.
 export async function fetchOpalOrders(s: Session) {
   const after = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()
-  const res = await s.http.get(`/?rest_route=/wc/v3/orders&per_page=30&order=asc&orderby=id&after=${encodeURIComponent(after)}`)
+  // order=DESC (newest first): with asc, once more than per_page orders existed in the window the
+  // NEWEST — i.e. the just-placed, not-yet-printed — orders fell off page 1 and never got polled,
+  // so on a busy service new/added orders silently stopped printing. Fetch newest-first with extra
+  // headroom, then sort ascending below so the kitchen still prints them oldest-first (FIFO).
+  const res = await s.http.get(`/?rest_route=/wc/v3/orders&per_page=50&order=desc&orderby=id&after=${encodeURIComponent(after)}`)
   const orders = (Array.isArray(res.data) ? res.data : []) as any[]
   const active = new Set(['processing', 'on-hold', 'pending'])
   return orders
     .filter((o) => active.has(String(o.status)) && (o.meta_data ?? []).some((m: any) => m.key === '_opc_source'))
+    .sort((a, b) => Number(a.id) - Number(b.id)) // FIFO: print the oldest un-seen order first
     .map((o) => {
       const meta = (k: string) => (o.meta_data ?? []).find((m: any) => m.key === k)?.value
       const rawNote = String(o.customer_note ?? '')
