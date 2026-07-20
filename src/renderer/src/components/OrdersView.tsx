@@ -7,6 +7,7 @@ interface Row {
   total: number
   payment_method: string
   order_type: string
+  table_label: string | null
   customer_name: string | null
   staff_name: string | null
   voided: number
@@ -18,6 +19,18 @@ interface Row {
 type OrderDetail = NonNullable<Awaited<ReturnType<Window['pos']['orderGet']>>>
 
 const time = (iso: string) => new Date(iso).toLocaleString('en-AU', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })
+
+// Where the order was for — the table for dine-in, otherwise the order type.
+const TYPE_LABEL: Record<string, string> = { table: 'Dine-in', takeaway: 'Takeaway', walk_in: 'Walk-in', delivery: 'Delivery' }
+const placeText = (o: { order_type?: string | null; table_label?: string | null }) => {
+  const t = (o.order_type || '').toLowerCase()
+  if (t === 'table') return o.table_label || 'Dine-in'
+  return TYPE_LABEL[t] || (o.order_type || '—').replace('_', '-')
+}
+const placeIcon = (o: { order_type?: string | null; table_label?: string | null }) => {
+  const t = (o.order_type || '').toLowerCase()
+  return t === 'table' ? '🍽' : t === 'delivery' ? '🛵' : t === 'walk_in' ? '🚶' : '🥡'
+}
 
 const PAY_METHODS = [
   { k: 'cash', label: 'Cash' },
@@ -96,7 +109,7 @@ export function OrdersView() {
             <div className={`ov-tr ov-click${o.voided ? ' void' : ''}`} key={o.id} onClick={() => openDetail(o.id)} title="View items">
               <span className="b">#{o.token}</span>
               <span>{time(o.created_at)}</span>
-              <span className="cap">{(o.order_type || '').replace('_', '-')}</span>
+              <span className="cap">{placeIcon(o)} {placeText(o)}</span>
               <span className="ell">{o.customer_name || '—'}</span>
               <span className="ell">{o.staff_name || '—'}</span>
               <span className="cap">{o.payment_method}</span>
@@ -134,11 +147,15 @@ export function OrdersView() {
               <div>
                 <h3 className="modal-title" style={{ margin: 0 }}>Order #{detail.token}</h3>
                 <div className="ovd-sub">
-                  {time(detail.created_at)} · {(detail.order_type || '').replace('_', '-')} · {detail.staff_name || '—'}
+                  {time(detail.created_at)} · {detail.staff_name || '—'}
                   {detail.customer_name ? ` · ${detail.customer_name}` : ''}
                 </div>
               </div>
               <button className="ovd-x" onClick={() => setDetail(null)} aria-label="Close">✕</button>
+            </div>
+            <div className={`ovd-where${(detail.order_type || '').toLowerCase() === 'table' ? ' dinein' : ''}`}>
+              <span className="ovd-where-i">{placeIcon(detail)}</span>
+              {placeText(detail)}
             </div>
             {detail.voided ? <div className="ovd-void">VOIDED{detail.void_reason ? ` — ${detail.void_reason}` : ''}</div> : null}
             <div className="ovd-items">
@@ -205,6 +222,9 @@ const OV_CSS = `
 .ovd{width:440px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;padding:18px}
 .ovd-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .ovd-sub{font-size:12.5px;color:#64748b;margin-top:3px;text-transform:capitalize}
+.ovd-where{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;margin:12px 0 2px;background:#eef1f6;color:#334155;font-weight:800;font-size:16px;padding:9px 16px;border-radius:10px}
+.ovd-where.dinein{background:#e7f1ff;color:var(--vt-main,#1e3a8a)}
+.ovd-where-i{font-size:18px;line-height:1}
 .ovd-x{border:none;background:#f1f5f9;width:30px;height:30px;border-radius:8px;font-size:15px;cursor:pointer;color:#475569;flex:0 0 auto}
 .ovd-void{margin-top:10px;background:#fee2e2;color:#b91c1c;font-weight:800;font-size:12.5px;padding:6px 10px;border-radius:8px;letter-spacing:.4px}
 .ovd-items{margin-top:12px;overflow:auto;border:1px solid #eef1f5;border-radius:10px}

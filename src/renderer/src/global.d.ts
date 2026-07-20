@@ -36,6 +36,7 @@ declare global {
         fee: number
         payment_method: string
         order_type: string
+        table_label: string | null
         note: string | null
         customer_name: string | null
         staff_name: string | null
@@ -125,6 +126,7 @@ declare global {
           total: number
           payment_method: string
           order_type: string
+          table_label: string | null
           customer_name: string | null
           staff_name: string | null
           voided: number

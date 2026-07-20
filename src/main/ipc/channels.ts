@@ -27,6 +27,7 @@ interface CommitPayload {
   customerName?: string
   staffName?: string
   openOrderId?: number
+  tableLabel?: string
 }
 
 const outletOf = (db: BetterSqlite3.Database) => {
@@ -465,7 +466,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     const where = clauses.length ? 'WHERE ' + clauses.join(' AND ') : ''
     return db
       .prepare(
-        `SELECT id,token,total,payment_method,order_type,customer_name,staff_name,voided,synced,sync_error,created_at FROM orders ${where} ORDER BY id DESC LIMIT 200`,
+        `SELECT id,token,total,payment_method,order_type,customer_name,staff_name,voided,synced,sync_error,created_at,table_label FROM orders ${where} ORDER BY id DESC LIMIT 200`,
       )
       .all(params)
   })
@@ -475,7 +476,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
   ipcMain.handle('order:get', (_e, id: number) => {
     const o = db
       .prepare(
-        'SELECT id,token,status,subtotal,tax,discount,total,tender,change,fee,payment_method,order_type,note,customer_name,staff_name,voided,void_reason,created_at FROM orders WHERE id=?',
+        'SELECT id,token,status,subtotal,tax,discount,total,tender,change,fee,payment_method,order_type,note,customer_name,staff_name,voided,void_reason,created_at,table_label FROM orders WHERE id=?',
       )
       .get(id) as Record<string, unknown> | undefined
     if (!o) return null
@@ -675,10 +676,17 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     ).t
     // Tie the sale to the open shift (0 = none open) so reports attribute it precisely.
     const shiftId = (db.prepare("SELECT id FROM shifts WHERE status='open' ORDER BY id DESC LIMIT 1").get() as { id?: number } | undefined)?.id ?? 0
+    // Record which table a dine-in order was on, so past-order details can show it. Prefer the
+    // label the till sends; otherwise read it off the open tab being settled (before it's deleted).
+    let tableLabel: string | null = payload.tableLabel ?? null
+    if (!tableLabel && payload.openOrderId) {
+      const oo = db.prepare('SELECT table_label FROM open_orders WHERE id=?').get(payload.openOrderId) as { table_label?: string } | undefined
+      tableLabel = oo?.table_label ?? null
+    }
     const info = db
       .prepare(
-        `INSERT INTO orders (token,status,subtotal,tax,discount,total,tender,change,fee,payment_method,order_type,note,customer_id,customer_name,staff_name,shift_id,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO orders (token,status,subtotal,tax,discount,total,tender,change,fee,payment_method,order_type,note,customer_id,customer_name,staff_name,shift_id,created_at,table_label)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         token,
@@ -698,6 +706,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
         payload.staffName ?? null,
         shiftId,
         new Date().toISOString(),
+        tableLabel,
       )
     const oid = info.lastInsertRowid as number
     const insItem = db.prepare(

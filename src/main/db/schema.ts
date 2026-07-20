@@ -61,6 +61,7 @@ const ALTERS: string[] = [
   // no shift open, >0 = the shift it belongs to.
   'ALTER TABLE orders ADD COLUMN shift_id INTEGER',
   'ALTER TABLE orders ADD COLUMN fee REAL DEFAULT 0', // surcharge amount, for the receipt + reprints
+  'ALTER TABLE orders ADD COLUMN table_label TEXT', // which table a dine-in order was on, so past orders show it
   // Per-item availability (from opal-pos-connect /menu): 1 = flagged unavailable today
   // (greyed + un-tappable), 1 = a "Special" (WooCommerce featured). Refreshed on each sync.
   'ALTER TABLE products ADD COLUMN unavailable INTEGER DEFAULT 0',

@@ -12,7 +12,7 @@ interface Totals {
 const money = (n: number) => (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`)
 
 export function PayModal({ onClose }: { onClose: () => void }) {
-  const { lines, orderType, discount, note, customer, clear } = useCart()
+  const { lines, orderType, discount, note, customer, tableLabel, clear } = useCart()
   const [totals, setTotals] = useState<Totals | null>(null)
   const [tenderStr, setTenderStr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -55,6 +55,7 @@ export function PayModal({ onClose }: { onClose: () => void }) {
         note,
         customerId: customer?.id,
         customerName: customer?.name,
+        tableLabel: tableLabel ?? undefined,
       })
       clear()
       onClose()
