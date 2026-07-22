@@ -494,25 +494,33 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
 
   // --- Restaurant: tables + open tabs (unpaid, fired to kitchen) ---
   ipcMain.handle('tables:list', () => {
-    const opens = db.prepare('SELECT id,table_label,lines,updated_at FROM open_orders').all() as {
+    const opens = db.prepare('SELECT id,table_label,order_type,lines,updated_at FROM open_orders').all() as {
       id: number
       table_label: string
+      order_type: string | null
       lines: string
       updated_at: string
     }[]
-    const byTable: Record<string, { id: number; items: number; total: number; updatedAt: string }> = {}
-    for (const o of opens) {
+    const summarize = (linesJson: string) => {
       let ls: { qty?: number; price?: number }[] = []
       try {
-        ls = JSON.parse(o.lines || '[]')
+        ls = JSON.parse(linesJson || '[]')
       } catch {
         /* ignore */
       }
-      byTable[o.table_label] = {
-        id: o.id,
-        items: ls.reduce((s, l) => s + (l.qty || 0), 0),
-        total: ls.reduce((s, l) => s + (l.price || 0) * (l.qty || 0), 0),
-        updatedAt: o.updated_at,
+      return { items: ls.reduce((s, l) => s + (l.qty || 0), 0), total: ls.reduce((s, l) => s + (l.price || 0) * (l.qty || 0), 0) }
+    }
+    const byTable: Record<string, { id: number; items: number; total: number; updatedAt: string }> = {}
+    // Take-away / walk-in tabs have no table on the floor — surface them separately so they can be
+    // recalled to take payment later (the same open-order machinery, just not tied to a table).
+    const pending: { label: string; type: string; open: { id: number; items: number; total: number; updatedAt: string } }[] = []
+    for (const o of opens) {
+      const sum = summarize(o.lines)
+      const open = { id: o.id, items: sum.items, total: sum.total, updatedAt: o.updated_at }
+      if (o.order_type && o.order_type !== 'table') {
+        pending.push({ label: o.table_label || (o.order_type === 'walk_in' ? 'Walk-in' : 'Take-away'), type: o.order_type, open })
+      } else {
+        byTable[o.table_label] = open
       }
     }
     // Prefer the WordPress floor (opal-pos-connect); fall back to local table_count.
@@ -520,11 +528,12 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     const floor: { label: string; area?: string; seats?: number }[] = cached.length
       ? cached.map((t) => ({ label: t.label, area: t.area || undefined, seats: t.seats || undefined }))
       : Array.from({ length: Number(getSettings(db).table_count) || 12 }, (_, i) => ({ label: `Table ${i + 1}` }))
-    return floor.map((t) => ({ ...t, open: byTable[t.label] ?? null }))
+    const tables = floor.map((t) => ({ ...t, open: byTable[t.label] ?? null }))
+    return { tables, pending }
   })
   ipcMain.handle('openorder:get', (_e, id: number) => {
     const o = db.prepare('SELECT * FROM open_orders WHERE id=?').get(id) as
-      | { id: number; table_label: string; lines: string; note: string; customer_id: number | null; customer_name: string | null; staff_name: string | null }
+      | { id: number; table_label: string; order_type: string | null; lines: string; note: string; customer_id: number | null; customer_name: string | null; staff_name: string | null }
       | undefined
     if (!o) return null
     let lines: unknown[] = []
@@ -533,7 +542,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
     } catch {
       /* ignore */
     }
-    return { id: o.id, tableLabel: o.table_label, lines, note: o.note, customerId: o.customer_id, customerName: o.customer_name, staffName: o.staff_name }
+    return { id: o.id, tableLabel: o.table_label, orderType: o.order_type || 'table', lines, note: o.note, customerId: o.customer_id, customerName: o.customer_name, staffName: o.staff_name }
   })
   // Re-print the kitchen PREPARE list for a currently-serving tab, e.g. when the original
   // ticket was lost or jammed. Prints only the prep tickets (no receipt); serialized per
@@ -567,7 +576,7 @@ export function registerIpc(db: BetterSqlite3.Database, sessionRef: SessionRef, 
         if (cfg)
           void printKitchenWithRetry(
             cfg,
-            buildKitchenTicket({ token: id, station: stationLabel(station), table: p.tableLabel ?? undefined, items: list, orderType: 'table', note: p.note ?? undefined }),
+            buildKitchenTicket({ token: id, station: stationLabel(station), table: p.tableLabel ?? undefined, items: list, orderType: p.orderType ?? 'table', note: p.note ?? undefined }),
           )
       }
     }

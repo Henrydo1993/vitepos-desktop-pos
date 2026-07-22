@@ -61,12 +61,13 @@ declare global {
       >
       syncNow: () => Promise<{ pending: number; pushed: number }>
       syncRefresh: () => Promise<{ products: number; productsRemoved: number; pushed: number; removed: number }>
-      tablesList: () => Promise<
-        { label: string; area?: string; seats?: number; open: { id: number; items: number; total: number; updatedAt: string } | null }[]
-      >
+      tablesList: () => Promise<{
+        tables: { label: string; area?: string; seats?: number; open: { id: number; items: number; total: number; updatedAt: string } | null }[]
+        pending: { label: string; type: string; open: { id: number; items: number; total: number; updatedAt: string } }[]
+      }>
       openOrderGet: (
         id: number,
-      ) => Promise<{ id: number; tableLabel: string; lines: CartLine[]; note: string; customerId: number | null; customerName: string | null } | null>
+      ) => Promise<{ id: number; tableLabel: string; orderType: string; lines: CartLine[]; note: string; customerId: number | null; customerName: string | null } | null>
       openOrderReprintPrepare: (id: number) => Promise<{ ok: boolean; stations: string[] }>
       openOrderSave: (p: {
         id?: number
@@ -78,7 +79,7 @@ declare global {
         staffName?: string | null
         lines?: CartLine[]
       }) => Promise<{ id: number }>
-      openOrderSend: (p: { id?: number; tableLabel?: string; note?: string; staffName?: string | null; lines?: CartLine[] }) => Promise<{ id: number; printed: number }>
+      openOrderSend: (p: { id?: number; tableLabel?: string; orderType?: string; note?: string; staffName?: string | null; lines?: CartLine[] }) => Promise<{ id: number; printed: number }>
       openOrderClose: (id: number) => Promise<{ ok: boolean }>
       shiftCurrent: () => Promise<Shift | null>
       shiftOpen: (openingFloat: number, staffName?: string) => Promise<Shift>

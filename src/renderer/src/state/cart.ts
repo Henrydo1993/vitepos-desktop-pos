@@ -41,7 +41,7 @@ interface CartState {
   setFee: (f: Fee) => void
   discardHeld: (i: number) => void
   setTable: (label: string | null, openId?: number | null) => void
-  loadOpen: (o: { id: number; tableLabel: string; lines: CartLine[]; note?: string; customerId?: number | null; customerName?: string | null }) => void
+  loadOpen: (o: { id: number; tableLabel: string; orderType?: string; lines: CartLine[]; note?: string; customerId?: number | null; customerName?: string | null }) => void
   markAllSent: () => void
 }
 
@@ -112,7 +112,7 @@ export const useCart = create<CartState>((set) => ({
       lines: o.lines.map((l) => ({ ...l })),
       tableLabel: o.tableLabel,
       openOrderId: o.id,
-      orderType: 'table',
+      orderType: (o.orderType as OrderType) || 'table',
       note: o.note ?? '',
       customer: o.customerId ? { id: o.customerId, name: o.customerName ?? '' } : null,
       discount: null,

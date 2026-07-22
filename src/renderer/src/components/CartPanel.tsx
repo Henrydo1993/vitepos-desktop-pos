@@ -25,7 +25,19 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
 
   const sendKitchen = async () => {
     if (!lines.length) return
-    await window.pos.openOrderSend({ id: openOrderId ?? undefined, tableLabel: tableLabel ?? undefined, note, staffName: staff?.name, lines })
+    // Pass orderType so re-sending a recalled take-away/walk-in keeps its type (not reverted to table).
+    await window.pos.openOrderSend({ id: openOrderId ?? undefined, tableLabel: tableLabel ?? undefined, orderType, note, staffName: staff?.name, lines })
+    clear()
+    onTables()
+  }
+  // Take-away / walk-in that isn't paying now: fire the kitchen prepare ticket + park it as an
+  // unpaid order under a name, so it can be recalled from the Tables screen to take payment later —
+  // exactly like a dine-in tab, just keyed by a name instead of a table.
+  const sendTakeaway = async () => {
+    if (!lines.length) return
+    const label = (window.prompt('Name for this order (so you can find it to take payment later):', customer?.name || '') || '').trim()
+    if (!label) return
+    await window.pos.openOrderSend({ id: openOrderId ?? undefined, tableLabel: label, orderType, note, staffName: staff?.name, lines })
     clear()
     onTables()
   }
@@ -223,11 +235,11 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
           </button>
         )}
         <div className="hold-pay">
-          {tableLabel ? (
+          {tableLabel || orderType !== 'table' ? (
             <button
               className="hold-btn"
               style={{ flex: 1, width: 'auto', background: '#0a8a3f', color: '#fff' }}
-              onClick={sendKitchen}
+              onClick={tableLabel ? sendKitchen : sendTakeaway}
               disabled={!lines.length}
             >
               🍳 Send to Kitchen

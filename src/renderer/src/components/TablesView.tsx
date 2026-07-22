@@ -7,17 +7,28 @@ export interface TableRow {
   open: { id: number; items: number; total: number; updatedAt: string } | null
 }
 
+interface PendingRow {
+  label: string
+  type: string
+  open: { id: number; items: number; total: number; updatedAt: string }
+}
+
 const ago = (iso: string) => {
   const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000))
   if (min < 1) return 'just now'
   if (min < 60) return `${min}m`
   return `${Math.floor(min / 60)}h ${min % 60}m`
 }
+const typeLabel = (t: string) => (t === 'walk_in' ? 'Walk-in' : t === 'delivery' ? 'Delivery' : 'Take-away')
 
 export function TablesView({ onOpen }: { onOpen: (t: TableRow) => void }) {
   const [tables, setTables] = useState<TableRow[]>([])
+  const [pending, setPending] = useState<PendingRow[]>([])
   useEffect(() => {
-    const load = () => window.pos.tablesList().then(setTables)
+    const load = () => window.pos.tablesList().then((d) => {
+      setTables(d.tables)
+      setPending(d.pending)
+    })
     load()
     const t = setInterval(load, 15000)
     return () => clearInterval(t)
@@ -35,24 +46,44 @@ export function TablesView({ onOpen }: { onOpen: (t: TableRow) => void }) {
         </span>
       </div>
       <div className="tv-body">
-        <div className="tv-grid">
-          {tables.map((t) => (
-            <button key={t.label} type="button" className={`tv-table${t.open ? ' occ' : ''}`} onClick={() => onOpen(t)}>
-              <div className="tv-label">{t.label}</div>
-              {t.area && <div className="tv-area">{t.area}</div>}
-              {t.open ? (
-                <>
-                  <div className="tv-total">${t.open.total.toFixed(2)}</div>
+        {pending.length > 0 && (
+          <section className="tv-sec">
+            <h3 className="tv-sec-h">Take-away &amp; Walk-in · waiting to pay</h3>
+            <div className="tv-grid">
+              {pending.map((p) => (
+                <button key={p.open.id} type="button" className="tv-table occ tv-away" onClick={() => onOpen({ label: p.label, area: typeLabel(p.type), open: p.open })}>
+                  <div className="tv-label">{p.label}</div>
+                  <div className="tv-area">{typeLabel(p.type)}</div>
+                  <div className="tv-total">${p.open.total.toFixed(2)}</div>
                   <div className="tv-meta">
-                    {t.open.items} item{t.open.items === 1 ? '' : 's'} · {ago(t.open.updatedAt)}
+                    {p.open.items} item{p.open.items === 1 ? '' : 's'} · {ago(p.open.updatedAt)}
                   </div>
-                </>
-              ) : (
-                <div className="tv-free">Free{t.seats ? ` · ${t.seats} seats` : ''}</div>
-              )}
-            </button>
-          ))}
-        </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+        <section className="tv-sec">
+          {pending.length > 0 && <h3 className="tv-sec-h">Tables</h3>}
+          <div className="tv-grid">
+            {tables.map((t) => (
+              <button key={t.label} type="button" className={`tv-table${t.open ? ' occ' : ''}`} onClick={() => onOpen(t)}>
+                <div className="tv-label">{t.label}</div>
+                {t.area && <div className="tv-area">{t.area}</div>}
+                {t.open ? (
+                  <>
+                    <div className="tv-total">${t.open.total.toFixed(2)}</div>
+                    <div className="tv-meta">
+                      {t.open.items} item{t.open.items === 1 ? '' : 's'} · {ago(t.open.updatedAt)}
+                    </div>
+                  </>
+                ) : (
+                  <div className="tv-free">Free{t.seats ? ` · ${t.seats} seats` : ''}</div>
+                )}
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   )
@@ -76,4 +107,7 @@ const TV_CSS = `
 .tv-table.occ .tv-area{color:rgba(255,255,255,.82)}
 .tv-total{margin-top:auto;font-size:22px;font-weight:800}
 .tv-meta{font-size:12.5px;opacity:.85}
+.tv-sec{margin-bottom:24px}
+.tv-sec-h{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;margin:0 0 12px}
+.tv-table.tv-away{background:linear-gradient(135deg,#b45309,#92400e);border-color:#b45309}
 `
