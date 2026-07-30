@@ -31,12 +31,14 @@ export function CartPanel({ onPay, onTables }: { onPay: () => void; onTables: ()
     onTables()
   }
   // Take-away / walk-in that isn't paying now: fire the kitchen prepare ticket + park it as an
-  // unpaid order under a name, so it can be recalled from the Tables screen to take payment later —
-  // exactly like a dine-in tab, just keyed by a name instead of a table.
+  // unpaid order, recallable from the Tables screen to take payment later — like a dine-in tab.
+  // One tap, no name prompt: Electron has no window.prompt (it silently returns null, which made
+  // this a no-op). Label by the attached customer's name, else the time; add a customer first if
+  // you want a specific name on it.
   const sendTakeaway = async () => {
     if (!lines.length) return
-    const label = (window.prompt('Name for this order (so you can find it to take payment later):', customer?.name || '') || '').trim()
-    if (!label) return
+    const now = new Date().toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })
+    const label = (customer?.name || '').trim() || now
     await window.pos.openOrderSend({ id: openOrderId ?? undefined, tableLabel: label, orderType, note, staffName: staff?.name, lines })
     clear()
     onTables()
