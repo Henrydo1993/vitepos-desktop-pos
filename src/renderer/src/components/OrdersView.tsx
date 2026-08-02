@@ -39,6 +39,9 @@ const PAY_METHODS = [
   { k: 'other', label: 'Other' },
 ]
 
+// Tap-to-void reasons (no typing — Electron has no window.prompt, and this is faster at the counter).
+const VOID_REASONS = ['Wrong / mis-rung order', 'Customer cancelled', 'Duplicate', 'Made incorrectly', 'Refund', 'Other']
+
 export function OrdersView() {
   const staff = useAuth((s) => s.staff)
   const [scope, setScope] = useState<'today' | 'all'>('today')
@@ -46,6 +49,7 @@ export function OrdersView() {
   const [rows, setRows] = useState<Row[]>([])
   const [syncing, setSyncing] = useState(false)
   const [payFor, setPayFor] = useState<number | null>(null)
+  const [voidFor, setVoidFor] = useState<number | null>(null)
   const [detail, setDetail] = useState<OrderDetail | null>(null)
 
   const openDetail = async (id: number) => {
@@ -61,10 +65,9 @@ export function OrdersView() {
   }, [scope, q])
 
   const reprint = (id: number) => window.pos.reprint(id)
-  const voidOrder = async (id: number) => {
-    const reason = prompt('Void reason?')
-    if (reason == null) return
+  const doVoid = async (id: number, reason: string) => {
     await window.pos.voidOrder(id, reason)
+    setVoidFor(null)
     load()
   }
   const changePayment = async (id: number, method: string) => {
@@ -117,7 +120,7 @@ export function OrdersView() {
               <span className="acts" onClick={(e) => e.stopPropagation()}>
                 <button onClick={() => reprint(o.id)}>Reprint</button>
                 {!o.voided && canVoid(staff) && <button onClick={() => setPayFor(o.id)}>Method</button>}
-                {!o.voided && canVoid(staff) && <button className="del" onClick={() => voidOrder(o.id)}>Void</button>}
+                {!o.voided && canVoid(staff) && <button className="del" onClick={() => setVoidFor(o.id)}>Void</button>}
               </span>
             </div>
           ))}
@@ -135,6 +138,23 @@ export function OrdersView() {
               ))}
             </div>
             <button className="btn" style={{ marginTop: 10, width: '100%' }} onClick={() => setPayFor(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {voidFor != null && (
+        <div className="modal-overlay" onClick={() => setVoidFor(null)}>
+          <div className="modal-sheet" onClick={(e) => e.stopPropagation()} style={{ width: 340 }}>
+            <h3 className="modal-title">Void this order — why?</h3>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {VOID_REASONS.map((r) => (
+                <button key={r} className="btn" onClick={() => doVoid(voidFor, r)}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            <button className="btn" style={{ marginTop: 10, width: '100%' }} onClick={() => setVoidFor(null)}>
               Cancel
             </button>
           </div>
