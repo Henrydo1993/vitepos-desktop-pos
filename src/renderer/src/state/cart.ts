@@ -28,6 +28,7 @@ interface CartState {
   tableLabel: string | null
   openOrderId: number | null
   add: (m: MenuItem) => void
+  addCustom: (c: { name: string; price: number; qty: number; toKitchen: boolean }) => void
   setQty: (i: number, qty: number) => void
   changeQty: (i: number, d: number) => void
   removeLine: (i: number) => void
@@ -83,6 +84,26 @@ export const useCart = create<CartState>((set) => ({
         ],
       }
     }),
+  addCustom: (c) =>
+    set((s) => ({
+      // Always a NEW line (never merged) — each custom entry is distinct. product_id 0 marks an open
+      // item; tax_rate 0 means the typed price is the exact charge (no tax stacked on top); station
+      // 'bill' = receipt-only (routeByStation skips it, so it won't hit the kitchen prepare ticket).
+      lines: [
+        ...s.lines,
+        {
+          product_id: 0,
+          name: c.name,
+          price: c.price,
+          qty: Math.max(1, Math.floor(c.qty || 1)),
+          station: c.toKitchen ? 'kitchen' : 'bill',
+          taxable: 0,
+          tax_rate: 0,
+          image: null,
+          modifiers: [],
+        },
+      ],
+    })),
   setQty: (i, qty) =>
     set((s) => {
       const lines = [...s.lines]

@@ -9,6 +9,7 @@ export function routeByStation(items: TicketItem[]): Record<string, TicketItem[]
   const out: Record<string, TicketItem[]> = {}
   for (const it of items) {
     const st = it.station || 'kitchen'
+    if (st === 'bill') continue // receipt-only line (e.g. a custom surcharge) — never on a prepare ticket
     ;(out[st] ??= []).push(it)
   }
   return out

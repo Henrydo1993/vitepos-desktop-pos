@@ -3,6 +3,7 @@ import type { MenuItem } from '../types'
 import { useCart } from '../state/cart'
 import { useAuth } from '../state/auth'
 import { VariationModal } from './VariationModal'
+import { CustomItemModal } from './CustomItemModal'
 
 const isPhoto = (img: string | null) => !!img && !/placeholder/i.test(img)
 function tint(name: string): string {
@@ -16,6 +17,7 @@ const initials = (name: string) =>
 export function ProductArea() {
   const [items, setItems] = useState<MenuItem[]>([])
   const [variable, setVariable] = useState<MenuItem | null>(null)
+  const [showCustom, setShowCustom] = useState(false)
   const [cat, setCat] = useState('All')
   const [q, setQ] = useState('')
   const add = useCart((s) => s.add)
@@ -63,6 +65,14 @@ export function ProductArea() {
           <span>🔍</span>
           <input placeholder="Scan barcode or search product…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
+        <button
+          type="button"
+          onClick={() => setShowCustom(true)}
+          title="Add a one-off custom item (name + price)"
+          style={{ height: 44, padding: '0 16px', borderRadius: 9, border: '1px solid var(--vt-border,#e5e8ee)', background: '#fff', color: 'var(--vt-main,#1e3a8a)', fontWeight: 700, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap', flex: '0 0 auto' }}
+        >
+          ＋ Custom
+        </button>
         <div className="status">
           <div className="s avatar" title={staff?.name ?? 'User'}>{(staff?.name ?? 'U').trim().charAt(0).toUpperCase()}</div>
         </div>
@@ -108,6 +118,7 @@ export function ProductArea() {
       </div>
 
       {variable && <VariationModal product={variable} onClose={() => setVariable(null)} />}
+      {showCustom && <CustomItemModal onClose={() => setShowCustom(false)} />}
     </div>
   )
 }
